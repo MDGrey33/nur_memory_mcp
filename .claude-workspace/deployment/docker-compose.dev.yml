@@ -1,0 +1,145 @@
+version: '3.8'
+
+services:
+  # ChromaDB - Vector database for persistent storage
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: chroma-dev
+    restart: unless-stopped
+
+    # Expose port for debugging
+    ports:
+      - "8000:8000"
+
+    # Volumes
+    volumes:
+      - chroma_data_dev:/chroma/chroma
+
+    # Environment variables
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+      - CHROMA_SERVER_HOST=0.0.0.0
+      - CHROMA_SERVER_HTTP_PORT=8000
+      # Development: logging verbosity
+      - LOG_LEVEL=DEBUG
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=chroma,environment=development"
+
+    # Network
+    networks:
+      - mcp-memory-network
+
+  # chroma-mcp - MCP gateway to ChromaDB
+  chroma-mcp:
+    image: ghcr.io/chroma-core/chroma-mcp:latest
+    container_name: chroma-mcp-dev
+    restart: unless-stopped
+
+    # Dependencies
+    depends_on:
+      chroma:
+        condition: service_healthy
+
+    # Environment variables
+    environment:
+      - CHROMA_CLIENT_TYPE=http
+      - CHROMA_HTTP_HOST=chroma
+      - CHROMA_HTTP_PORT=8000
+      - LOG_LEVEL=DEBUG
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=chroma-mcp,environment=development"
+
+    # Network
+    networks:
+      - mcp-memory-network
+
+  # agent-app - LLM agent application
+  agent-app:
+    build:
+      context: ../implementation/agent-app
+      dockerfile: Dockerfile
+      # Enable BuildKit for better caching
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    image: mcp-memory-agent:dev
+    container_name: agent-app-dev
+    restart: unless-stopped
+
+    # Dependencies
+    depends_on:
+      chroma-mcp:
+        condition: service_started
+      chroma:
+        condition: service_healthy
+
+    # Environment variables from .env.development
+    env_file:
+      - .env.development
+
+    # Volume mounts for hot reload
+    volumes:
+      - ../implementation/agent-app/src:/app/src:ro
+      # Uncomment for live code editing (remove read-only)
+      # - ../implementation/agent-app/src:/app/src
+
+    # Expose debugging ports
+    ports:
+      - "8080:8080"   # HTTP API (if added)
+      - "5678:5678"   # Python debugger (debugpy)
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=agent-app,environment=development"
+
+    # Network
+    networks:
+      - mcp-memory-network
+
+    # Override command for development with debugger support
+    # Uncomment to enable debugpy for remote debugging
+    # command: python -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m src.app
+
+# Docker volumes for persistence
+volumes:
+  chroma_data_dev:
+    driver: local
+    name: mcp_memory_chroma_data_dev
+
+# Docker network for inter-service communication
+networks:
+  mcp-memory-network:
+    driver: bridge
+    name: mcp-memory-dev-network

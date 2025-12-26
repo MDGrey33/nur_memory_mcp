@@ -1,0 +1,52 @@
+# Prometheus Configuration for MCP Memory
+# Future use - currently the services don't expose Prometheus metrics
+# This is a template for when metrics are implemented
+
+global:
+  scrape_interval: 15s       # Default scrape interval
+  evaluation_interval: 15s   # Evaluate rules every 15 seconds
+  scrape_timeout: 10s        # Timeout for scraping targets
+
+  # Labels to attach to metrics
+  external_labels:
+    cluster: 'mcp-memory'
+    environment: 'production'
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+# rule_files:
+#   - "alerts.yml"
+
+# Scrape configurations
+scrape_configs:
+  # ChromaDB metrics (if/when exposed)
+  - job_name: 'chroma'
+    static_configs:
+      - targets: ['chroma:9090']  # Adjust port if ChromaDB adds metrics endpoint
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Agent App metrics (if/when exposed)
+  - job_name: 'agent-app'
+    static_configs:
+      - targets: ['agent-app:9090']  # Adjust port when metrics are added
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Docker container metrics (requires cAdvisor)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

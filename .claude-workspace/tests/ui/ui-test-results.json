@@ -1,0 +1,58 @@
+{
+  "timestamp": "2025-12-26T02:34:00.510264",
+  "tests": [
+    {
+      "name": "Health Endpoint",
+      "status": "PASS",
+      "details": "Status: 200, Response: {'status': 'ok', 'service': 'mcp-memory'}"
+    },
+    {
+      "name": "ChromaDB Heartbeat",
+      "status": "PASS",
+      "details": "Status: 200"
+    },
+    {
+      "name": "MCP Initialize",
+      "status": "PASS",
+      "details": "Status: 200, SSE response received"
+    },
+    {
+      "name": "Detailed Health",
+      "status": "FAIL",
+      "details": "Status: 404"
+    },
+    {
+      "name": "ChromaDB Collections",
+      "status": "FAIL",
+      "details": "Found: ['test_col', 'memory']"
+    },
+    {
+      "name": "Server Info",
+      "status": "PASS",
+      "details": "Server name and tools capability present"
+    },
+    {
+      "name": "SSE Format",
+      "status": "PASS",
+      "details": "Response format: SSE"
+    },
+    {
+      "name": "Error Handling",
+      "status": "PASS",
+      "details": "Status: 406 (expected 4xx)"
+    },
+    {
+      "name": "CORS Headers",
+      "status": "FAIL",
+      "details": "CORS: Not set"
+    },
+    {
+      "name": "Response Time",
+      "status": "PASS",
+      "details": "Health endpoint: 1ms"
+    }
+  ],
+  "passed": 7,
+  "failed": 3,
+  "skipped": 0
+}

@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # ChromaDB - Vector database for persistent storage
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: chroma
+    ports:
+      - "8000:8000"  # Expose for debugging (optional)
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - mcp-memory-network
+
+  # chroma-mcp - MCP gateway to ChromaDB
+  chroma-mcp:
+    image: ghcr.io/chroma-core/chroma-mcp:latest
+    container_name: chroma-mcp
+    depends_on:
+      chroma:
+        condition: service_healthy
+    environment:
+      - CHROMA_CLIENT_TYPE=http
+      - CHROMA_HTTP_HOST=chroma
+      - CHROMA_HTTP_PORT=8000
+    networks:
+      - mcp-memory-network
+    # Note: chroma-mcp is typically stdio-driven, but we're using HTTP mode
+    # If your MCP client needs HTTP access, expose a port here
+
+  # agent-app - LLM agent application
+  agent-app:
+    build:
+      context: ./agent-app
+      dockerfile: Dockerfile
+    container_name: agent-app
+    depends_on:
+      chroma-mcp:
+        condition: service_started
+      chroma:
+        condition: service_healthy
+    environment:
+      # MCP Configuration
+      - MCP_ENDPOINT=chroma
+      # Note: We're using ChromaDB directly via HTTP for simplicity in V1
+      # V2 could use chroma-mcp over stdio or HTTP
+
+      # Memory Policy
+      - MEMORY_CONFIDENCE_MIN=0.7
+      - HISTORY_TAIL_N=16
+      - MEMORY_TOP_K=8
+      - MEMORY_MAX_PER_WINDOW=3
+
+      # Optional token budget (uncomment to enable)
+      # - CONTEXT_TOKEN_BUDGET=4000
+
+      # Logging
+      - LOG_LEVEL=INFO
+    networks:
+      - mcp-memory-network
+    restart: unless-stopped
+    # Uncomment to expose API if you add HTTP endpoints
+    # ports:
+    #   - "8080:8080"
+
+# Docker volumes for persistence
+volumes:
+  chroma_data:
+    driver: local
+    # Only chroma_data is required for persistence
+    # All conversation history and memories are stored here
+
+# Docker network for inter-service communication
+networks:
+  mcp-memory-network:
+    driver: bridge

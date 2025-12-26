@@ -1,0 +1,29 @@
+# Environment files with secrets
+.env.production
+.env.local
+
+# Secrets directory (except .gitkeep)
+secrets/*
+!secrets/.gitkeep
+
+# Backup files
+*.backup
+*.bak
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+.temp/
