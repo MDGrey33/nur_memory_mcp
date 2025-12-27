@@ -462,7 +462,7 @@ docker-compose -f docker-compose.v3.yml exec postgres \
   psql -U events -d events -c "\dt"
 
 # 6. Test MCP endpoint
-curl http://localhost:3000/health
+curl http://localhost:3001/health
 
 # 7. Check logs for errors
 docker-compose -f docker-compose.v3.yml logs | grep ERROR

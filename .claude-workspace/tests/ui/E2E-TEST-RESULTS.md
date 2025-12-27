@@ -1,7 +1,7 @@
 # E2E Test Results - MCP Memory Server v2.0
 
 **Date**: 2025-12-26
-**Environment**: Local (localhost:3000, localhost:8001)
+**Environment**: Local (localhost:3001, localhost:8001)
 **Test Framework**: Custom Python E2E Suite
 
 ---

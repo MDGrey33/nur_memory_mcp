@@ -232,7 +232,7 @@ docker compose -f docker-compose.v3.yml exec mcp-server \
 docker compose -f docker-compose.v3.yml logs -f
 
 # Test connectivity
-curl http://localhost:3000/health
+curl http://localhost:3001/health
 
 # Configure MCP client (see V3-README.md)
 ```
@@ -316,7 +316,7 @@ curl http://localhost:3000/health
 - [ ] Wait for health checks (30 seconds)
 - [ ] Run health check script
 - [ ] Check logs for errors
-- [ ] Test MCP endpoint (`curl http://localhost:3000/health`)
+- [ ] Test MCP endpoint (`curl http://localhost:3001/health`)
 
 ### Post-Deployment
 - [ ] Configure MCP client (Claude Desktop, etc.)

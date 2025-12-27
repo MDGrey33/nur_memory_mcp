@@ -25,7 +25,7 @@ docker compose -f docker-compose.v3.yml exec mcp-server \
 
 # 5. Configure Claude Desktop
 # Edit ~/Library/Application Support/Claude/claude_desktop_config.json
-# Add MCP server: http://localhost:3000/mcp/
+# Add MCP server: http://localhost:3001/mcp/
 ```
 
 **That's it!** You now have a fully functional V3 deployment with semantic events.
@@ -252,7 +252,7 @@ docker compose -f docker-compose.v3.yml exec postgres \
 - **Implementation**: `../implementation/mcp-server/`
 
 ### Health Endpoints
-- MCP Server: http://localhost:3000/health
+- MCP Server: http://localhost:3001/health
 - ChromaDB: http://localhost:8001/api/v2/heartbeat
 - PostgreSQL: `psql -U events -d events`
 

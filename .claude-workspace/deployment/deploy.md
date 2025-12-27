@@ -92,7 +92,7 @@ docker-compose ps
 
 ```bash
 # Test basic connectivity
-curl http://localhost:3000/health
+curl http://localhost:3001/health
 
 # Configure Claude Desktop (see Configuration section below)
 ```
@@ -203,7 +203,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
       "command": "npx",
       "args": [
         "mcp-remote",
-        "http://localhost:3000/mcp/"
+        "http://localhost:3001/mcp/"
       ]
     }
   }
@@ -216,7 +216,7 @@ Restart Claude Desktop after configuration.
 
 ```bash
 # Add to Claude Code configuration
-claude-code config add-server memory http://localhost:3000/mcp/
+claude-code config add-server memory http://localhost:3001/mcp/
 ```
 
 #### Cursor IDE
@@ -226,7 +226,7 @@ Add to Cursor settings:
 {
   "mcp.servers": {
     "memory": {
-      "url": "http://localhost:3000/mcp/"
+      "url": "http://localhost:3001/mcp/"
     }
   }
 }
@@ -290,10 +290,10 @@ docker-compose exec mcp-server python healthcheck.py --service chroma
 #### 1. Test MCP Server
 ```bash
 # HTTP endpoint should respond
-curl http://localhost:3000/health
+curl http://localhost:3001/health
 
 # Or use httpie
-http GET http://localhost:3000/health
+http GET http://localhost:3001/health
 ```
 
 #### 2. Test ChromaDB
@@ -747,7 +747,7 @@ server {
     ssl_certificate_key /path/to/key.pem;
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:3001;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -782,7 +782,7 @@ docker-compose restart mcp-server event-worker
 - **Application logs**: Stdout/stderr captured by Docker
 
 ### Health Endpoints
-- **MCP Server**: `http://localhost:3000/health`
+- **MCP Server**: `http://localhost:3001/health`
 - **ChromaDB**: `http://localhost:8001/api/v2/heartbeat`
 - **PostgreSQL**: Connect via `psql` or health check script
 

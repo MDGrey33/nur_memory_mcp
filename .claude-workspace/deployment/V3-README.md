@@ -56,7 +56,7 @@ docker-compose -f docker-compose.v3.yml logs -f
 {
   "mcpServers": {
     "memory": {
-      "url": "http://localhost:3000/mcp/"
+      "url": "http://localhost:3001/mcp/"
     }
   }
 }
@@ -412,7 +412,7 @@ docker-compose -f docker-compose.v3.yml logs --no-color | grep ERROR
 
 ### Health Endpoints
 
-- MCP Server: `http://localhost:3000/health`
+- MCP Server: `http://localhost:3001/health`
 - ChromaDB: `http://localhost:8001/api/v2/heartbeat`
 - PostgreSQL: `psql -U events -d events -c "SELECT 1;"`
 

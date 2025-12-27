@@ -68,7 +68,7 @@ V3 transforms MCP Memory from a pure text retrieval system into an **intelligent
                              ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │                    MCP TRANSPORT LAYER                                │
-│              Streamable HTTP (localhost:3000)                         │
+│              Streamable HTTP (localhost:3001)                         │
 └────────────────────────────┬─────────────────────────────────────────┘
                              │
                              ▼
@@ -605,7 +605,7 @@ Grand Total: ~10 GB/year (easily fits on single host)
   "mcpServers": {
     "memory": {
       "command": "npx",
-      "args": ["mcp-remote", "http://localhost:3000/mcp/"]
+      "args": ["mcp-remote", "http://localhost:3001/mcp/"]
     }
   }
 }

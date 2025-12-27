@@ -178,7 +178,7 @@ services:
 docker-compose -f docker-compose.prod.yml up -d
 
 # Access Grafana
-open http://localhost:3000
+open http://localhost:3001
 # Login: admin / changeme
 
 # Add Prometheus data source:

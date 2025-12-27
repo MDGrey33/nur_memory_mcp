@@ -21,7 +21,7 @@ MCP Memory Server is a Model Context Protocol (MCP) server providing persistent 
         ▼                ▼                ▼                   ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                       MCP TRANSPORT LAYER                                 │
-│                    Streamable HTTP (localhost:3000)                       │
+│                    Streamable HTTP (localhost:3001)                       │
 │                    + ngrok tunnel for HTTPS access                        │
 └───────────────────────────────┬──────────────────────────────────────────┘
                                 │
@@ -701,7 +701,7 @@ LOG_LEVEL=INFO                # Logging level (default: INFO)
 {
   "mcpServers": {
     "memory": {
-      "url": "http://localhost:3000/mcp/"
+      "url": "http://localhost:3001/mcp/"
     }
   }
 }
@@ -713,7 +713,7 @@ LOG_LEVEL=INFO                # Logging level (default: INFO)
   "mcpServers": {
     "memory": {
       "command": "npx",
-      "args": ["mcp-remote", "http://localhost:3000/mcp/"]
+      "args": ["mcp-remote", "http://localhost:3001/mcp/"]
     }
   }
 }

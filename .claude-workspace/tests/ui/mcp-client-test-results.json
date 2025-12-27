@@ -8,7 +8,7 @@
     "timestamp": "2025-12-27T17:53:27.326111"
   },
   "environment": {
-    "mcp_server": "http://localhost:3000",
+    "mcp_server": "http://localhost:3001",
     "version": "3.0.0"
   },
   "tests": [
