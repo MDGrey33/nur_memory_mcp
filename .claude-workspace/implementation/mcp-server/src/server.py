@@ -167,7 +167,10 @@ def memory_search(
     min_confidence: float = 0.0
 ) -> str:
     """
-    Search memories using semantic similarity.
+    Search stored facts and memories (not documents/events).
+
+    Memories are explicit facts stored via memory_store (preferences, facts,
+    decisions). For document content and events, use hybrid_search instead.
 
     Args:
         query: What to search for (e.g., 'user preferences')
@@ -747,14 +750,17 @@ def artifact_search(
     expand_neighbors: bool = False
 ) -> str:
     """
-    Semantic search across artifacts and chunks.
+    Search document content with metadata filters.
+
+    Use when you need to filter by artifact_type, source_system, or sensitivity.
+    For general discovery, use hybrid_search instead (includes events).
 
     Args:
         query: Search query
         limit: Maximum results (1-50)
-        artifact_type: Filter by type
-        source_system: Filter by source
-        sensitivity: Filter by sensitivity
+        artifact_type: Filter by type (email, document, meeting_notes, etc.)
+        source_system: Filter by source (gmail, slack, notion, etc.)
+        sensitivity: Filter by sensitivity level
         expand_neighbors: Include ±1 chunks for context
     """
     try:
@@ -943,14 +949,23 @@ async def hybrid_search(
     expand_neighbors: bool = False
 ) -> str:
     """
-    Search across all collections with RRF merging.
+    PRIMARY SEARCH - Start here for context discovery.
+
+    Searches across artifacts AND semantic events with source metadata for
+    credibility reasoning. Returns document content plus extracted events
+    (commitments, decisions, risks, etc.) with evidence quotes.
+
+    Use this first for broad discovery, then use specialized tools to drill down:
+    - event_search: For structured filters (category, time range, specific artifact)
+    - artifact_search: For document-specific filters (type, source, sensitivity)
+    - memory_search: For stored facts/memories (different domain)
 
     Args:
-        query: Search query
+        query: Natural language search query
         limit: Maximum results (1-50)
-        include_memory: Include memory collection
-        include_events: Include semantic events from Postgres (V3)
-        expand_neighbors: Include ±1 chunks for context
+        include_memory: Also search stored memories
+        include_events: Include semantic events with source context (recommended)
+        expand_neighbors: Include ±1 chunks for more context
     """
     try:
         if not query or len(query) > 500:
@@ -1121,12 +1136,19 @@ async def event_search_tool(
     include_evidence: bool = True
 ) -> dict:
     """
-    Search semantic events extracted from artifacts.
+    Search events with structured filters (category, time, artifact).
+
+    Use for targeted queries like "all commitments from last week" or
+    "decisions from the board meeting". For general discovery, start
+    with hybrid_search instead.
+
+    Returns events with source metadata (document_date, source_type,
+    author_title, etc.) for credibility reasoning.
 
     Args:
-        query: Full-text search on event narratives
+        query: Full-text search on event narratives (optional)
         limit: Maximum results (1-100)
-        category: Filter by category (Commitment, Execution, Decision, Collaboration, QualityRisk, Feedback, Change, Stakeholder)
+        category: Commitment, Execution, Decision, Collaboration, QualityRisk, Feedback, Change, Stakeholder
         time_from: Filter events after this time (ISO8601)
         time_to: Filter events before this time (ISO8601)
         artifact_uid: Filter to specific artifact
