@@ -605,7 +605,7 @@ Grand Total: ~10 GB/year (easily fits on single host)
   "mcpServers": {
     "memory": {
       "command": "npx",
-      "args": ["@anthropic-ai/mcp-remote", "http://localhost:3000/mcp/"]
+      "args": ["mcp-remote", "http://localhost:3000/mcp/"]
     }
   }
 }

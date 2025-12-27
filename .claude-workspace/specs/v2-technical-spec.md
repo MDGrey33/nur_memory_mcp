@@ -1545,7 +1545,7 @@ volumes:
 {
   "mcpServers": {
     "memory": {
-      "url": "http://localhost:3000/mcp/"
+      "url": "http://localhost:3001/mcp/"
     }
   }
 }
@@ -2046,14 +2046,14 @@ docker compose build
 docker compose up -d
 
 # 5. Verify health
-curl http://localhost:3000/health
+curl http://localhost:3001/health
 
 # 6. Test embedding_health tool
 # Use Claude to call: embedding_health
 
 # 7. Update Claude Desktop config (if needed)
 # File: ~/Library/Application Support/Claude/claude_desktop_config.json
-# Should point to: http://localhost:3000/mcp/
+# Should point to: http://localhost:3001/mcp/
 ```
 
 ### 11.2 Rollback Plan
@@ -2082,7 +2082,7 @@ docker compose up -d
 
 1. **Health Check:**
    ```bash
-   curl http://localhost:3000/health
+   curl http://localhost:3001/health
    # Expected: {"status": "healthy", ...}
    ```
 

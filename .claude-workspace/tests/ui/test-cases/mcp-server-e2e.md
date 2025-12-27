@@ -38,7 +38,7 @@ Testing involves HTTP endpoint verification and MCP tool invocation.
 **Type**: HTTP GET
 **Endpoint**: `GET /health`
 **Steps**:
-1. Send GET request to http://localhost:3000/health
+1. Send GET request to http://localhost:3001/health
 **Expected**:
 - Status 200
 - JSON response with `{"status": "ok", "service": "mcp-memory"}`
@@ -62,7 +62,7 @@ Testing involves HTTP endpoint verification and MCP tool invocation.
 **Type**: HTTP OPTIONS/POST
 **Endpoint**: `POST /mcp/`
 **Steps**:
-1. Send POST request to http://localhost:3000/mcp/
+1. Send POST request to http://localhost:3001/mcp/
 2. Include proper MCP protocol headers
 **Expected**:
 - Valid MCP response or connection upgrade

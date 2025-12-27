@@ -73,7 +73,7 @@ python src/server.py
 python -m src.worker
 ```
 
-Server runs at: `http://localhost:3000/mcp/`
+Server runs at: `http://localhost:3001/mcp/`
 
 ### HTTPS Access (via ngrok)
 
@@ -95,7 +95,7 @@ Edit `~/.cursor/mcp.json`:
 {
   "mcpServers": {
     "memory": {
-      "url": "http://localhost:3000/mcp/"
+      "url": "http://localhost:3001/mcp/"
     }
   }
 }
@@ -130,7 +130,7 @@ python test_samples.py all
 ### Health Check
 
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:3001/health
 ```
 
 ## Architecture

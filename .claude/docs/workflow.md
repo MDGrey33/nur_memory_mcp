@@ -117,7 +117,7 @@ This document details the 10-phase autonomous development cycle.
 ```
 
 **Checks**:
-- [ ] `curl localhost:3000/health` returns 200
+- [ ] `curl localhost:3001/health` returns 200
 - [ ] `.env` ports match `docker-compose.yml` ports
 - [ ] All expected tools exposed (count matches spec)
 - [ ] Real tool execution succeeds (not mocked)

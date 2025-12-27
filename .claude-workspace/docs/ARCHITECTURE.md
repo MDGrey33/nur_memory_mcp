@@ -713,7 +713,7 @@ LOG_LEVEL=INFO                # Logging level (default: INFO)
   "mcpServers": {
     "memory": {
       "command": "npx",
-      "args": ["@anthropic-ai/mcp-remote", "http://localhost:3000/mcp/"]
+      "args": ["mcp-remote", "http://localhost:3000/mcp/"]
     }
   }
 }

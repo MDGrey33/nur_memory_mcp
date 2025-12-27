@@ -67,7 +67,7 @@ Before presenting to user, the following MUST be verified against **running serv
 ### Infrastructure Verification
 ```bash
 # These commands MUST succeed before UAT
-curl http://localhost:3000/health    # MCP Server
+curl http://localhost:3001/health    # MCP Server
 curl http://localhost:8001/api/v2/heartbeat  # ChromaDB (actual port)
 ```
 
@@ -84,7 +84,7 @@ Before UAT, test with an actual MCP client (not curl):
 
 ```bash
 # Must verify ALL tools are exposed
-curl -s -X POST http://localhost:3000/mcp/ \
+curl -s -X POST http://localhost:3001/mcp/ \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   --data '{"jsonrpc":"2.0","method":"tools/list","id":1}' | grep -c '"name"'
@@ -135,13 +135,13 @@ Before UAT, verify the client config works:
 ### For Claude Desktop
 ```bash
 # Check config exists and has correct URL
-cat ~/Library/Application\ Support/Claude/claude_desktop_config.json | grep "localhost:3000/mcp"
+cat ~/Library/Application\ Support/Claude/claude_desktop_config.json | grep "localhost:3001/mcp"
 ```
 
 ### For Cursor
 ```bash
 # Check config exists and has correct URL
-cat ~/.cursor/mcp.json | grep "localhost:3000/mcp"
+cat ~/.cursor/mcp.json | grep "localhost:3001/mcp"
 ```
 
 ---
@@ -179,7 +179,7 @@ The Chief of Staff MUST verify ALL items before presenting to user:
 - [ ] At least one tool from each category executes successfully
 
 ### Client Configuration
-- [ ] Cursor config (`~/.cursor/mcp.json`) has correct URL: `http://localhost:3000/mcp/`
+- [ ] Cursor config (`~/.cursor/mcp.json`) has correct URL: `http://localhost:3001/mcp/`
 - [ ] Claude Desktop config has correct URL (if applicable)
 
 **If ANY item fails, do NOT proceed to UAT.**

@@ -112,13 +112,13 @@ Quality gates ensure every delivery meets high standards before reaching the use
 **Verification Commands** (must all succeed):
 ```bash
 # 1. Health check
-curl http://localhost:3000/health | grep '"status":"ok"'
+curl http://localhost:3001/health | grep '"status":"ok"'
 
 # 2. Port consistency
 grep CHROMA_PORT .env  # Must match docker-compose
 
 # 3. Tool count (v2 = 12 tools)
-curl -X POST http://localhost:3000/mcp/ \
+curl -X POST http://localhost:3001/mcp/ \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 

@@ -56,7 +56,7 @@ fi
 ### Health Check Requirements
 
 Before proceeding with tests:
-1. Check if `http://localhost:3000/health` (or configured backend URL) responds
+1. Check if `http://localhost:3001/health` (or configured backend URL) responds
 2. Check if frontend dev server is accessible
 3. If services are down, attempt auto-start using project's package.json scripts
 4. Wait up to 30 seconds for services to become healthy

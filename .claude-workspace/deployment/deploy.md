@@ -202,7 +202,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
     "memory": {
       "command": "npx",
       "args": [
-        "@anthropic-ai/mcp-remote",
+        "mcp-remote",
         "http://localhost:3000/mcp/"
       ]
     }

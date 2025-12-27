@@ -54,7 +54,7 @@ prompt: Design architecture based on specification. Write to .claude-workspace/a
 
 **Implementation Standards:**
 - All API URLs must be configurable via environment variables
-- Default to `http://localhost:3000` for development
+- Default to `http://localhost:3001` for development
 - Create `.env.example` with all required environment variables
 - Never hardcode URLs, ports, or secrets in source code
 
@@ -76,7 +76,7 @@ prompt: |
 
   REQUIRED: Make all API URLs configurable:
   - Use environment variables (e.g., REACT_APP_API_URL, VITE_API_URL)
-  - Default to http://localhost:3000 for development
+  - Default to http://localhost:3001 for development
   - Create .env.example documenting all env vars
 ```
 

@@ -36,7 +36,7 @@ docker compose up -d
 {
   "mcpServers": {
     "memory": {
-      "url": "http://localhost:3000/mcp/"
+      "url": "http://localhost:3001/mcp/"
     }
   }
 }
@@ -136,10 +136,10 @@ Environment variables:
 
 ```bash
 # Health check
-curl http://localhost:3000/health
+curl http://localhost:3001/health
 
 # MCP endpoint (should return SSE error without proper headers)
-curl http://localhost:3000/mcp/
+curl http://localhost:3001/mcp/
 ```
 
 ## Persistence
@@ -190,7 +190,7 @@ python src/server.py
 ```
 
 ### Tools don't appear in Claude
-1. Check URL has trailing slash: `http://localhost:3000/mcp/`
+1. Check URL has trailing slash: `http://localhost:3001/mcp/`
 2. Restart Claude completely
 3. Check server logs: `python src/server.py` (in foreground)
 
