@@ -40,7 +40,6 @@ RUN pip install --no-cache-dir \
 
 # Copy source code
 COPY src/ ./src/
-COPY prompts/ ./prompts/
 
 # Keep as root for development convenience
 USER root
@@ -57,7 +56,6 @@ FROM base AS production
 
 # Copy only necessary files
 COPY src/ ./src/
-COPY prompts/ ./prompts/
 
 # Change ownership to non-root user
 RUN chown -R mcp:mcp /app

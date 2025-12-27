@@ -23,11 +23,12 @@ import requests
 import time
 import uuid
 import sys
+import argparse
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 
-# Configuration
-MCP_URL = "http://localhost:3000/mcp/"
+# Configuration (can be overridden by --url argument)
+DEFAULT_MCP_URL = "http://localhost:3000/mcp/"
 HEADERS = {
     "Content-Type": "application/json",
     "Accept": "application/json, text/event-stream"
@@ -114,8 +115,13 @@ class MCPClient:
 class E2ETestRunner:
     """Runs full user simulation tests"""
 
-    def __init__(self):
-        self.client = MCPClient(MCP_URL)
+    def __init__(self, url: str = None):
+        mcp_url = url if url else DEFAULT_MCP_URL
+        # Ensure URL ends with /mcp/
+        if not mcp_url.endswith('/mcp/'):
+            mcp_url = mcp_url.rstrip('/') + '/mcp/'
+        self.client = MCPClient(mcp_url)
+        print(f"Connecting to: {mcp_url}")
         self.results = []
         self.test_data = {
             "memory_id": None,
@@ -494,7 +500,7 @@ class E2ETestRunner:
             return
 
         result = self.client.call_tool("job_status", {
-            "artifact_uid": self.test_data["v3_artifact_uid"]
+            "artifact_id": self.test_data["v3_artifact_uid"]
         })
 
         if "result" in result:
@@ -582,7 +588,7 @@ class E2ETestRunner:
             return
 
         result = self.client.call_tool("event_list_for_artifact", {
-            "artifact_uid": self.test_data["v3_artifact_uid"],
+            "artifact_id": self.test_data["v3_artifact_uid"],
             "include_evidence": True
         })
 
@@ -632,7 +638,7 @@ class E2ETestRunner:
             return
 
         result = self.client.call_tool("event_reextract", {
-            "artifact_uid": self.test_data["v3_artifact_uid"],
+            "artifact_id": self.test_data["v3_artifact_uid"],
             "force": True
         })
 
@@ -734,5 +740,10 @@ class E2ETestRunner:
 
 
 if __name__ == "__main__":
-    runner = E2ETestRunner()
+    parser = argparse.ArgumentParser(description="MCP Memory Server E2E Tests")
+    parser.add_argument("--url", default=DEFAULT_MCP_URL,
+                        help=f"MCP server URL (default: {DEFAULT_MCP_URL})")
+    args = parser.parse_args()
+
+    runner = E2ETestRunner(url=args.url)
     runner.run_all_tests()

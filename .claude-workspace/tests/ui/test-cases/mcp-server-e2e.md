@@ -1,9 +1,35 @@
-# E2E Test Cases: MCP Memory Server v2.0
+# E2E Test Cases: MCP Memory Server v3.0
+
+## CRITICAL: Pre-UAT Testing Requirement
+
+> **The user should NEVER be the first to test MCP tools in the browser.**
+>
+> Before presenting ANY work for User Acceptance Testing (UAT), you MUST:
+>
+> 1. Run the API E2E test: `python .claude-workspace/tests/e2e/full_user_simulation.py`
+> 2. Run the browser test: `python .claude-workspace/tests/ui/playwright_mcp_inspector.py --headed`
+> 3. Verify ALL 17 tools are listed in MCP Inspector
+> 4. Execute at least `embedding_health` tool and verify response
+> 5. Take screenshots as evidence
+>
+> **DO NOT proceed to UAT if any test fails.**
 
 ## Overview
 
 The MCP Memory Server is a backend service that exposes tools via HTTP/SSE (Streamable HTTP transport).
 Testing involves HTTP endpoint verification and MCP tool invocation.
+
+### Available Tools (17 total)
+
+**Core Tools (12):**
+- `memory_store`, `memory_search`, `memory_list`, `memory_delete`
+- `history_append`, `history_get`
+- `artifact_ingest`, `artifact_search`, `artifact_get`, `artifact_delete`
+- `hybrid_search`, `embedding_health`
+
+**V3 Event Tools (5):**
+- `event_search_tool`, `event_get_tool`, `event_list_for_artifact`
+- `event_reextract`, `job_status`
 
 ---
 

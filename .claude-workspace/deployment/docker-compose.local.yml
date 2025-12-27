@@ -1,0 +1,49 @@
+# MCP Memory Server - Uses existing ChromaDB and PostgreSQL
+# Run with: docker compose -f docker-compose.local.yml --env-file .env up -d
+
+services:
+  mcp-server:
+    build:
+      context: ../implementation/mcp-server
+      dockerfile: ../../deployment/Dockerfile
+      target: production
+    image: mcp-memory-server:v3
+    container_name: mcp-server
+    ports:
+      - "${MCP_EXTERNAL_PORT:-3001}:3000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_EMBED_MODEL=${OPENAI_EMBED_MODEL:-text-embedding-3-large}
+      - OPENAI_EVENT_MODEL=${OPENAI_EVENT_MODEL:-gpt-4o-mini}
+      - CHROMA_HOST=${CHROMA_HOST:-host.docker.internal}
+      - CHROMA_PORT=${CHROMA_PORT:-8001}
+      - EVENTS_DB_DSN=${EVENTS_DB_DSN}
+      - MCP_PORT=${MCP_PORT:-3000}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  event-worker:
+    build:
+      context: ../implementation/mcp-server
+      dockerfile: ../../deployment/Dockerfile
+      target: production
+    image: mcp-memory-server:v3
+    container_name: mcp-event-worker
+    command: python -m src.worker
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_EVENT_MODEL=${OPENAI_EVENT_MODEL:-gpt-4o-mini}
+      - CHROMA_HOST=${CHROMA_HOST:-host.docker.internal}
+      - CHROMA_PORT=${CHROMA_PORT:-8001}
+      - EVENTS_DB_DSN=${EVENTS_DB_DSN}
+      - WORKER_ID=${WORKER_ID:-worker-1}
+      - POLL_INTERVAL_MS=${POLL_INTERVAL_MS:-1000}
+      - EVENT_MAX_ATTEMPTS=${EVENT_MAX_ATTEMPTS:-5}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    depends_on:
+      - mcp-server

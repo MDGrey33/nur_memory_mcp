@@ -139,16 +139,48 @@ This document details the 10-phase autonomous development cycle.
 - Apply learned patterns
 - Decide: iterate or present to user
 
+## Phase 7.5: Browser UI Testing (MANDATORY)
+
+**Agent**: QA Lead
+**Input**: Running MCP server, MCP Inspector
+**Output**: `tests/ui/ui-test-results.json`, screenshots
+**Type**: BLOCKING - Must pass before Phase 8 UAT
+
+**WHY THIS EXISTS**: The user should NEVER be the first to test MCP tools in the browser. API tests can pass while browser interactions fail due to CORS, SSE handling, or UI issues.
+
+**QA Lead MUST**:
+1. Start MCP Inspector: `npx @modelcontextprotocol/inspector`
+2. Run browser test: `python .claude-workspace/tests/ui/playwright_mcp_inspector.py --headed`
+3. Verify ALL 17 tools are listed in MCP Inspector UI
+4. Execute at least `embedding_health` tool and verify response shows `status: "healthy"`
+5. Take screenshots as evidence
+6. Save results to `tests/ui/ui-test-results.json`
+
+**Mandatory Checks**:
+- [ ] MCP Inspector connects successfully (green "Connected" status)
+- [ ] Server shows "MCP Memory v3.0" with correct version
+- [ ] All 17 tools visible in Tools list
+- [ ] `embedding_health` tool returns healthy status
+- [ ] No "Failed to fetch" errors in UI
+- [ ] Screenshots captured for evidence
+
+**FAILURE ACTION**: Do NOT proceed to UAT. Fix browser/UI issues first.
+
 ## Phase 8: UAT Presentation
 
 **Agent**: Chief of Staff
-**Trigger**: Internal review passes
+**Trigger**: Internal review AND browser tests pass
 **Output**: UAT package to user
+
+**Pre-requisites** (MUST verify):
+- [ ] Phase 6.5 real-world integration passed
+- [ ] Phase 7.5 browser UI testing passed
+- [ ] All screenshots captured
 
 **Delivers**:
 - Summary of work
 - Key deliverables
-- Test results
+- Test results (API + Browser)
 - Demo instructions
 - Request for approval or feedback
 
