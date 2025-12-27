@@ -8,6 +8,8 @@ A Model Context Protocol (MCP) server for persistent memory and context manageme
 - **Evidence Linking** - Every extracted event includes source quotes with character offsets
 - **PostgreSQL Storage** - Events stored in Postgres with full-text search
 - **Async Worker Pipeline** - Background event extraction with retry logic
+- **Source Metadata** - Track document dates, source types, and author context for credibility reasoning
+- **Hybrid Search with Events** - Search across artifacts AND events in one query
 
 ## Features
 
@@ -37,7 +39,7 @@ A Model Context Protocol (MCP) server for persistent memory and context manageme
 - `artifact_delete` - Delete an artifact
 
 ### Search Tools
-- `hybrid_search` - Cross-collection semantic + keyword search
+- `hybrid_search` - Cross-collection search (artifacts + events) with source metadata
 - `embedding_health` - Check OpenAI embedding service status
 
 ### V3 Event Tools
@@ -223,6 +225,24 @@ V3 extracts 8 types of semantic events:
 | Feedback | User input, reviews, critiques |
 | Change | Modifications, pivots, updates |
 | Stakeholder | Who's involved, roles |
+
+## Source Metadata
+
+V3 supports rich source metadata for credibility reasoning. When ingesting artifacts, you can provide:
+
+| Field | Values | Purpose |
+|-------|--------|---------|
+| `document_date` | ISO date (YYYY-MM-DD) | When document was authored |
+| `source_type` | email, slack, meeting_notes, document, policy, contract, chat, transcript, wiki, ticket | Document origin |
+| `document_status` | draft, final, approved, superseded, archived | Document lifecycle stage |
+| `author_title` | Free text (e.g., "CEO", "Project Lead") | Author's role |
+| `distribution_scope` | private, team, department, company, public | Intended audience |
+
+This metadata flows through to events, enabling models to reason about:
+- **Recency**: Which information is most current
+- **Authority**: Who made statements and in what capacity
+- **Formality**: Draft vs. approved documents
+- **Context**: Meeting notes vs. official policy
 
 ## License
 

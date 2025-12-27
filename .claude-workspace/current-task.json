@@ -1,27 +1,8 @@
 {
-  "task_id": "task-20251227-184659",
-  "user_request": "Fix high priority issues from code review: 1) Bare except clause in job_queue_service.py, 2) N+1 query in event_tools.py, 3) Missing OpenAI timeout in event_extraction_service.py",
-  "status": "completed",
-  "created_at": "2025-12-27T16:46:59Z",
-  "completed_at": "2025-12-27T16:52:00Z",
-  "iterations": 1,
-  "confidence": 100,
-  "fixes_applied": [
-    {
-      "issue": "Bare except clause",
-      "file": "services/job_queue_service.py:330",
-      "fix": "Changed to catch (ValueError, TypeError) with warning log"
-    },
-    {
-      "issue": "N+1 query",
-      "file": "tools/event_tools.py:121-140",
-      "fix": "Batch fetch evidence using IN clause (also fixed in event_list_for_revision)"
-    },
-    {
-      "issue": "Missing OpenAI timeout",
-      "file": "services/event_extraction_service.py:166",
-      "fix": "Added timeout=self.timeout to both chat completion calls"
-    }
-  ],
-  "tests_passed": "22/22 E2E tests"
+  "task_id": "task-20251227-202801",
+  "user_request": "Add source metadata to artifacts and events for authority/credibility reasoning - document_date, source_type, document_status, author_title, distribution_scope",
+  "status": "planning",
+  "created_at": "2025-12-27T18:28:01Z",
+  "iterations": 0,
+  "confidence": 0
 }

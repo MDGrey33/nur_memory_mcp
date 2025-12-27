@@ -70,8 +70,21 @@ async def event_search(
                 "details": {"valid_categories": EVENT_CATEGORIES}
             }
 
-        # Build query
-        query_parts = ["SELECT e.* FROM semantic_event e WHERE 1=1"]
+        # Build query - join with artifact_revision for source metadata
+        query_parts = ["""
+            SELECT e.*,
+                   ar.title as source_title,
+                   ar.document_date as source_document_date,
+                   ar.source_type as source_source_type,
+                   ar.document_status as source_document_status,
+                   ar.author_title as source_author_title,
+                   ar.distribution_scope as source_distribution_scope,
+                   ar.source_system as source_source_system,
+                   ar.ingested_at as source_ingested_at
+            FROM semantic_event e
+            LEFT JOIN artifact_revision ar ON e.artifact_uid = ar.artifact_uid AND e.revision_id = ar.revision_id
+            WHERE 1=1
+        """]
         params = []
         param_idx = 1
 
@@ -152,16 +165,30 @@ async def event_search(
         # Format response
         formatted_events = []
         for event in events:
-            formatted_events.append({
-                "event_id": str(event["event_id"]),
+            # Build source context for authority/credibility reasoning
+            source_context = {
                 "artifact_uid": event["artifact_uid"],
                 "revision_id": event["revision_id"],
+                "title": event.get("source_title"),
+                "document_date": str(event["source_document_date"]) if event.get("source_document_date") else None,
+                "source_type": event.get("source_source_type"),
+                "document_status": event.get("source_document_status"),
+                "author_title": event.get("source_author_title"),
+                "distribution_scope": event.get("source_distribution_scope"),
+                "source_system": event.get("source_source_system"),
+                "ingested_at": event["source_ingested_at"].isoformat() if event.get("source_ingested_at") else None
+            }
+
+            formatted_events.append({
+                "event_id": str(event["event_id"]),
                 "category": event["category"],
                 "event_time": event["event_time"].isoformat() if event.get("event_time") else None,
+                "created_at": event["created_at"].isoformat() if event.get("created_at") else None,
                 "narrative": event["narrative"],
                 "subject": event["subject_json"],
                 "actors": event["actors_json"],
                 "confidence": event["confidence"],
+                "source": source_context,
                 "evidence": event.get("evidence", []) if include_evidence else None
             })
 
@@ -194,8 +221,21 @@ async def event_get(
         Event dict with evidence
     """
     try:
-        # Fetch event
-        event_sql = "SELECT * FROM semantic_event WHERE event_id = $1"
+        # Fetch event with source metadata
+        event_sql = """
+            SELECT e.*,
+                   ar.title as source_title,
+                   ar.document_date as source_document_date,
+                   ar.source_type as source_source_type,
+                   ar.document_status as source_document_status,
+                   ar.author_title as source_author_title,
+                   ar.distribution_scope as source_distribution_scope,
+                   ar.source_system as source_source_system,
+                   ar.ingested_at as source_ingested_at
+            FROM semantic_event e
+            LEFT JOIN artifact_revision ar ON e.artifact_uid = ar.artifact_uid AND e.revision_id = ar.revision_id
+            WHERE e.event_id = $1
+        """
 
         try:
             event_uuid = UUID(event_id.replace("evt_", ""))
@@ -233,19 +273,32 @@ async def event_get(
             for ev in evidence_rows
         ]
 
-        return {
-            "event_id": str(event["event_id"]),
+        # Build source context for authority/credibility reasoning
+        source_context = {
             "artifact_uid": event["artifact_uid"],
             "revision_id": event["revision_id"],
+            "title": event.get("source_title"),
+            "document_date": str(event["source_document_date"]) if event.get("source_document_date") else None,
+            "source_type": event.get("source_source_type"),
+            "document_status": event.get("source_document_status"),
+            "author_title": event.get("source_author_title"),
+            "distribution_scope": event.get("source_distribution_scope"),
+            "source_system": event.get("source_source_system"),
+            "ingested_at": event["source_ingested_at"].isoformat() if event.get("source_ingested_at") else None
+        }
+
+        return {
+            "event_id": str(event["event_id"]),
             "category": event["category"],
             "event_time": event["event_time"].isoformat() if event.get("event_time") else None,
+            "created_at": event["created_at"].isoformat(),
             "narrative": event["narrative"],
             "subject": event["subject_json"],
             "actors": event["actors_json"],
             "confidence": event["confidence"],
+            "source": source_context,
             "evidence": evidence,
-            "extraction_run_id": str(event["extraction_run_id"]),
-            "created_at": event["created_at"].isoformat()
+            "extraction_run_id": str(event["extraction_run_id"])
         }
 
     except Exception as e:

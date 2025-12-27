@@ -50,20 +50,31 @@ docker-compose -f docker-compose.v3.yml logs -f
 
 ### 5. Configure MCP Client
 
-**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+**Cursor IDE** (`~/.cursor/mcp.json`):
 
 ```json
 {
   "mcpServers": {
     "memory": {
-      "command": "npx",
-      "args": ["@anthropic-ai/mcp-remote", "http://localhost:3000/mcp/"]
+      "url": "http://localhost:3000/mcp/"
     }
   }
 }
 ```
 
-Restart Claude Desktop after configuration.
+**Claude Desktop** (requires HTTPS):
+
+1. Start ngrok to expose your local server:
+   ```bash
+   ngrok http 3000
+   ```
+2. Open Claude Desktop -> **Settings** -> **Connectors**
+3. Click **Add Custom Connector**
+4. Enter:
+   - **Name**: `memory`
+   - **URL**: `https://your-ngrok-url.ngrok-free.app/mcp/`
+
+> **Note**: Claude Desktop requires HTTPS URLs. Use ngrok or similar to expose your local server with SSL.
 
 ---
 

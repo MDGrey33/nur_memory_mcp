@@ -419,7 +419,13 @@ async def artifact_ingest(
     ts: Optional[str] = None,
     sensitivity: str = "normal",
     visibility_scope: str = "me",
-    retention_policy: str = "forever"
+    retention_policy: str = "forever",
+    # Source metadata for authority/credibility reasoning
+    document_date: Optional[str] = None,
+    source_type: Optional[str] = None,
+    document_status: Optional[str] = None,
+    author_title: Optional[str] = None,
+    distribution_scope: Optional[str] = None
 ) -> dict:
     """
     Ingest documents, emails, chats with automatic chunking.
@@ -437,6 +443,13 @@ async def artifact_ingest(
         sensitivity: Privacy level (normal, sensitive, highly_sensitive)
         visibility_scope: Who can see (me, team, org, custom)
         retention_policy: Retention rule (forever, 1y, until_resolved, custom)
+
+        Source metadata for reasoning (all optional):
+        document_date: Actual date of document/meeting (YYYY-MM-DD), not ingestion date
+        source_type: email, slack, meeting_notes, document, policy, contract, chat, transcript, wiki, ticket
+        document_status: draft, final, approved, superseded, archived
+        author_title: Role/title of author (e.g., "Engineering Manager", "CEO")
+        distribution_scope: private, team, department, company, public
     """
     try:
         # Validate inputs
@@ -451,6 +464,19 @@ async def artifact_ingest(
 
         if visibility_scope not in ["me", "team", "org", "custom"]:
             return {"error": f"Invalid visibility_scope: {visibility_scope}"}
+
+        # Validate source metadata fields
+        valid_source_types = ["email", "slack", "meeting_notes", "document", "policy", "contract", "chat", "transcript", "wiki", "ticket"]
+        if source_type and source_type not in valid_source_types:
+            return {"error": f"Invalid source_type: {source_type}. Must be one of: {', '.join(valid_source_types)}"}
+
+        valid_doc_statuses = ["draft", "final", "approved", "superseded", "archived"]
+        if document_status and document_status not in valid_doc_statuses:
+            return {"error": f"Invalid document_status: {document_status}. Must be one of: {', '.join(valid_doc_statuses)}"}
+
+        valid_distribution_scopes = ["private", "team", "department", "company", "public"]
+        if distribution_scope and distribution_scope not in valid_distribution_scopes:
+            return {"error": f"Invalid distribution_scope: {distribution_scope}. Must be one of: {', '.join(valid_distribution_scopes)}"}
 
         # Compute content hash
         content_hash = hashlib.sha256(content.encode()).hexdigest()
@@ -508,7 +534,13 @@ async def artifact_ingest(
             "embedding_provider": "openai",
             "embedding_model": config.openai_embed_model,
             "embedding_dimensions": config.openai_embed_dims,
-            "ingested_at": datetime.utcnow().isoformat() + "Z"
+            "ingested_at": datetime.utcnow().isoformat() + "Z",
+            # Source metadata for authority/credibility reasoning
+            "document_date": document_date or "",
+            "source_type": source_type or "",
+            "document_status": document_status or "",
+            "author_title": author_title or "",
+            "distribution_scope": distribution_scope or ""
         }
 
         # V3: Generate stable artifact_uid and revision_id
@@ -555,10 +587,12 @@ async def artifact_ingest(
                         # Insert new revision (include artifact_id for worker to fetch from ChromaDB)
                         (
                             """INSERT INTO artifact_revision
-                               (artifact_uid, revision_id, artifact_id, content_hash, token_count, is_chunked, chunk_count, is_latest, source_system, source_id, title)
-                               VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10)
+                               (artifact_uid, revision_id, artifact_id, content_hash, token_count, is_chunked, chunk_count, is_latest, source_system, source_id, title,
+                                document_date, source_type, document_status, author_title, distribution_scope)
+                               VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10, $11, $12, $13, $14, $15)
                                ON CONFLICT (artifact_uid, revision_id) DO NOTHING""",
-                            (artifact_uid, revision_id, artifact_id, content_hash, token_count, False, 0, source_system, source_id or "", title or "")
+                            (artifact_uid, revision_id, artifact_id, content_hash, token_count, False, 0, source_system, source_id or "", title or "",
+                             document_date, source_type, document_status, author_title, distribution_scope)
                         )
                     ])
 
@@ -664,10 +698,12 @@ async def artifact_ingest(
                         # Insert new revision
                         (
                             """INSERT INTO artifact_revision
-                               (artifact_uid, revision_id, artifact_id, content_hash, token_count, is_chunked, chunk_count, is_latest, source_system, source_id, title)
-                               VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10)
+                               (artifact_uid, revision_id, artifact_id, content_hash, token_count, is_chunked, chunk_count, is_latest, source_system, source_id, title,
+                                document_date, source_type, document_status, author_title, distribution_scope)
+                               VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10, $11, $12, $13, $14, $15)
                                ON CONFLICT (artifact_uid, revision_id) DO NOTHING""",
-                            (artifact_uid, revision_id, artifact_id, content_hash, token_count, True, len(chunks), source_system, source_id or "", title or "")
+                            (artifact_uid, revision_id, artifact_id, content_hash, token_count, True, len(chunks), source_system, source_id or "", title or "",
+                             document_date, source_type, document_status, author_title, distribution_scope)
                         )
                     ])
 
@@ -899,10 +935,11 @@ def artifact_delete(artifact_id: str) -> str:
 
 
 @mcp.tool()
-def hybrid_search(
+async def hybrid_search(
     query: str,
     limit: int = 5,
     include_memory: bool = False,
+    include_events: bool = True,
     expand_neighbors: bool = False
 ) -> str:
     """
@@ -912,6 +949,7 @@ def hybrid_search(
         query: Search query
         limit: Maximum results (1-50)
         include_memory: Include memory collection
+        include_events: Include semantic events from Postgres (V3)
         expand_neighbors: Include ±1 chunks for context
     """
     try:
@@ -921,7 +959,7 @@ def hybrid_search(
         if limit < 1 or limit > 50:
             return "Error: Limit must be between 1 and 50"
 
-        # Use retrieval service
+        # Use retrieval service for ChromaDB collections
         results = retrieval_service.hybrid_search(
             query=query,
             limit=limit,
@@ -929,18 +967,39 @@ def hybrid_search(
             expand_neighbors=expand_neighbors
         )
 
-        if not results:
-            return "No results found."
-
         # Determine collections searched
         collections_searched = ["artifacts", "artifact_chunks"]
         if include_memory:
             collections_searched.append("memory")
 
-        # Format output
-        output = [f"Found {len(results)} results (searched: {', '.join(collections_searched)}):\n"]
+        # V3: Also search semantic events in Postgres
+        event_results = []
+        if include_events and pg_client:
+            try:
+                from tools.event_tools import event_search
+                event_response = await event_search(
+                    pg_client,
+                    query=query,
+                    limit=limit,
+                    include_evidence=True
+                )
+                if "events" in event_response:
+                    event_results = event_response["events"]
+                    collections_searched.append("events")
+            except Exception as e:
+                logger.warning(f"Event search failed: {e}")
 
-        for i, merged_result in enumerate(results, 1):
+        if not results and not event_results:
+            return "No results found."
+
+        # Format output
+        total_results = len(results) + len(event_results)
+        output = [f"Found {total_results} results (searched: {', '.join(collections_searched)}):\n"]
+
+        result_num = 1
+
+        # Output ChromaDB results
+        for merged_result in results:
             result = merged_result.result
             metadata = result.metadata
 
@@ -948,16 +1007,22 @@ def hybrid_search(
             if result.collection == "memory":
                 result_type = "memory"
 
-            output.append(f"[{i}] RRF score: {merged_result.rrf_score:.3f} (from: {', '.join(merged_result.collections)})")
+            output.append(f"[{result_num}] RRF score: {merged_result.rrf_score:.3f} (from: {', '.join(merged_result.collections)})")
             output.append(f"    Type: {result_type} | ID: {result.id}")
 
             if result.collection in ["artifacts", "artifact_chunks"]:
                 title = metadata.get("title", "Untitled")
                 source = metadata.get("source_system", "unknown")
                 sensitivity = metadata.get("sensitivity", "normal")
+                doc_date = metadata.get("document_date", "")
+                doc_status = metadata.get("document_status", "")
 
                 output.append(f"    Title: {title}")
                 output.append(f"    Source: {source} | Sensitivity: {sensitivity}")
+                if doc_date:
+                    output.append(f"    Document Date: {doc_date}")
+                if doc_status:
+                    output.append(f"    Status: {doc_status}")
 
             # Snippet
             snippet = result.content[:200].replace("\n", " ")
@@ -971,6 +1036,43 @@ def hybrid_search(
                 output.append(f"    Evidence: {source_url}")
 
             output.append("")  # Blank line
+            result_num += 1
+
+        # Output Event results (V3)
+        for event in event_results:
+            output.append(f"[{result_num}] Event: {event['category']} (confidence: {event['confidence']:.0%})")
+            output.append(f"    Type: event | ID: {event['event_id']}")
+            output.append(f"    Narrative: {event['narrative']}")
+
+            # Event time
+            if event.get("event_time"):
+                output.append(f"    Event Time: {event['event_time']}")
+
+            # Source context for authority reasoning
+            source = event.get("source", {})
+            if source.get("title"):
+                output.append(f"    Source: {source.get('title')}")
+            if source.get("document_date"):
+                output.append(f"    Document Date: {source.get('document_date')}")
+            if source.get("source_type"):
+                output.append(f"    Source Type: {source.get('source_type')}")
+            if source.get("document_status"):
+                output.append(f"    Status: {source.get('document_status')}")
+            if source.get("author_title"):
+                output.append(f"    Author: {source.get('author_title')}")
+            if source.get("distribution_scope"):
+                output.append(f"    Distribution: {source.get('distribution_scope')}")
+
+            # Evidence quote
+            evidence = event.get("evidence", [])
+            if evidence:
+                quote = evidence[0].get("quote", "")[:100]
+                if len(evidence[0].get("quote", "")) > 100:
+                    quote += "..."
+                output.append(f"    Evidence: \"{quote}\"")
+
+            output.append("")  # Blank line
+            result_num += 1
 
         return "\n".join(output)
 

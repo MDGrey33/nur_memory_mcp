@@ -61,3 +61,9 @@ class ArtifactMetadata:
     embedding_model: str
     embedding_dimensions: int
     ingested_at: str
+    # Source metadata for authority/credibility reasoning
+    document_date: Optional[str] = None
+    source_type: Optional[str] = None
+    document_status: Optional[str] = None
+    author_title: Optional[str] = None
+    distribution_scope: Optional[str] = None

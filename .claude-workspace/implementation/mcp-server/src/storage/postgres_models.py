@@ -27,6 +27,13 @@ class ArtifactRevision:
     retention_policy: str
     is_latest: bool
     ingested_at: datetime
+    # Source metadata for authority/credibility reasoning
+    title: Optional[str] = None
+    document_date: Optional[str] = None
+    source_type: Optional[str] = None
+    document_status: Optional[str] = None
+    author_title: Optional[str] = None
+    distribution_scope: Optional[str] = None
 
 
 @dataclass
