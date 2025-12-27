@@ -101,22 +101,13 @@ Edit `~/.cursor/mcp.json`:
 
 ### Claude Desktop
 
-Claude Desktop requires stdio transport. Use `mcp-remote` proxy:
+1. Open Claude Desktop → **Settings** → **Connectors**
+2. Click **Add Custom Connector**
+3. Enter:
+   - **Name**: `memory`
+   - **URL**: `https://your-ngrok-url.ngrok-free.app/mcp/`
 
-```json
-{
-  "mcpServers": {
-    "memory": {
-      "command": "npx",
-      "args": ["-y", "@anthropic-ai/mcp-remote", "https://your-ngrok-url.ngrok-free.app/mcp/"]
-    }
-  }
-}
-```
-
-### Claude AI (Web)
-
-Use the HTTPS ngrok URL directly in Claude AI's MCP configuration.
+> **Note**: Claude Desktop requires HTTPS. Use ngrok to expose your local server.
 
 ## Testing
 

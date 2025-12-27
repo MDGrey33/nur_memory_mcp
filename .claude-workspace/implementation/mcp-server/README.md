@@ -42,19 +42,17 @@ docker compose up -d
 }
 ```
 
-**For Claude Desktop**, edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+**For Claude Desktop**:
 
-```json
-{
-  "mcpServers": {
-    "memory": {
-      "url": "http://localhost:3000/mcp/"
-    }
-  }
-}
-```
+1. Open Claude Desktop → **Settings** → **Connectors**
+2. Click **Add Custom Connector**
+3. Enter:
+   - **Name**: `memory`
+   - **URL**: `https://your-ngrok-url.ngrok-free.app/mcp/`
 
-**Important**: Include the trailing slash in the URL: `http://localhost:3000/mcp/`
+> **Note**: Claude Desktop requires HTTPS. Use ngrok (`ngrok http 3000`) to expose your local server.
+
+**Important**: Include the trailing slash in the URL!
 
 ### 3. Restart Claude and test
 
