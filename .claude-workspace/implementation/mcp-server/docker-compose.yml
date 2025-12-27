@@ -21,6 +21,28 @@ services:
     networks:
       - mcp-network
 
+  # V3: PostgreSQL - Events database
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres-events
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=events
+      - POSTGRES_USER=events
+      - POSTGRES_PASSWORD=events
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U events"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
   # MCP Memory Server - HTTP Transport
   mcp-server:
     build: .
@@ -30,10 +52,37 @@ services:
     environment:
       - CHROMA_HOST=chroma
       - CHROMA_PORT=8000
+      - EVENTS_DB_DSN=postgresql://events:events@postgres:5432/events
       - MCP_PORT=3000
+      - LOG_LEVEL=INFO
+      - OPENAI_EVENT_MODEL=gpt-4o-mini
+    depends_on:
+      chroma:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  # V3: Event Worker - Async event extraction
+  event-worker:
+    build: .
+    container_name: event-worker
+    command: python -m src.worker
+    environment:
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+      - EVENTS_DB_DSN=postgresql://events:events@postgres:5432/events
+      - WORKER_ID=event-worker-1
+      - POLL_INTERVAL_MS=1000
+      - EVENT_MAX_ATTEMPTS=5
+      - OPENAI_EVENT_MODEL=gpt-4o-mini
       - LOG_LEVEL=INFO
     depends_on:
       chroma:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     networks:
       - mcp-network
@@ -41,6 +90,7 @@ services:
 
 volumes:
   chroma_data:
+  postgres_data:
 
 networks:
   mcp-network:

@@ -1,6 +1,13 @@
-# MCP Memory Server v2.0
+# MCP Memory Server v3.0
 
-A Model Context Protocol (MCP) server for persistent memory and context management. Provides semantic search, artifact storage, and hybrid retrieval capabilities.
+A Model Context Protocol (MCP) server for persistent memory and context management with **semantic event extraction**. Provides semantic search, artifact storage, and intelligent event analysis.
+
+## What's New in V3
+
+- **Semantic Event Extraction** - Automatically extracts commitments, decisions, risks from documents
+- **Evidence Linking** - Every extracted event includes source quotes with character offsets
+- **PostgreSQL Storage** - Events stored in Postgres with full-text search
+- **Async Worker Pipeline** - Background event extraction with retry logic
 
 ## Features
 
@@ -9,9 +16,9 @@ A Model Context Protocol (MCP) server for persistent memory and context manageme
 - **Artifact Ingestion** - Store and chunk large documents (emails, docs, code)
 - **Hybrid Search** - Combined semantic + keyword search with RRF ranking
 - **History Tracking** - Append-only conversation history per session
-- **Privacy Filtering** - Automatic PII detection and filtering
+- **Event Extraction** - Extract structured events (commitments, decisions, risks) from artifacts
 
-## Tools Available (12 total)
+## Tools Available (17 total)
 
 ### Memory Tools
 - `memory_store` - Store a memory with type and confidence
@@ -29,23 +36,39 @@ A Model Context Protocol (MCP) server for persistent memory and context manageme
 - `artifact_get` - Retrieve artifact by ID
 - `artifact_delete` - Delete an artifact
 
-### Advanced Tools
+### Search Tools
 - `hybrid_search` - Cross-collection semantic + keyword search
 - `embedding_health` - Check OpenAI embedding service status
+
+### V3 Event Tools
+- `event_search` - Query events with filters (category, time, artifact)
+- `event_get` - Get single event by ID with evidence
+- `event_list` - List all events for an artifact
+- `event_reextract` - Force re-extraction of events
+- `job_status` - Check extraction job status
 
 ## Quick Start
 
 ### Prerequisites
 - Python 3.11+
 - ChromaDB running on port 8001
+- PostgreSQL running on port 5432
 - OpenAI API key
 
 ### Start the Server
 
 ```bash
+# Start services with Docker Compose
+cd .claude-workspace/deployment
+docker-compose up -d
+
+# Or manually:
 cd .claude-workspace/implementation/mcp-server
 pip install -r requirements.txt
 python src/server.py
+
+# Start event worker (separate terminal)
+python -m src.worker
 ```
 
 Server runs at: `http://localhost:3000/mcp/`
@@ -100,14 +123,15 @@ Use the HTTPS ngrok URL directly in Claude AI's MCP configuration.
 ### Automated Tests
 
 ```bash
-# Full user simulation (HTTP client)
+# Full user simulation (22 tests)
 python3 .claude-workspace/tests/e2e/full_user_simulation.py
 
-# Browser UI automation (requires Playwright)
-cd .claude-workspace/tests/e2e
-npm install playwright
-npx playwright install chromium
-node browser_mcp_test.js
+# Event extraction validation
+python3 .claude-workspace/tests/e2e/validate_event_extraction.py
+
+# Test sample documents
+cd .claude-workspace/tests/e2e/sample_docs
+python test_samples.py all
 ```
 
 ### Health Check
@@ -125,27 +149,50 @@ curl http://localhost:3000/health
 └─────────────────┘     │   HTTP)         │
                         └────────┬────────┘
                                  │
-                        ┌────────▼────────┐
-                        │    ChromaDB     │
-                        │  (Vector Store) │
-                        └────────┬────────┘
-                                 │
-                        ┌────────▼────────┐
-                        │  OpenAI API     │
-                        │  (Embeddings)   │
-                        └─────────────────┘
+          ┌──────────────────────┼──────────────────────┐
+          │                      │                      │
+          ▼                      ▼                      ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│    ChromaDB     │    │   PostgreSQL    │    │  Event Worker   │
+│  (Vector Store) │    │   (Events DB)   │    │  (Background)   │
+└────────┬────────┘    └────────┬────────┘    └────────┬────────┘
+         │                      │                      │
+         └──────────────────────┼──────────────────────┘
+                                │
+                       ┌────────▼────────┐
+                       │   OpenAI API    │
+                       │  (Embeddings +  │
+                       │   Extraction)   │
+                       └─────────────────┘
 ```
 
 ## Environment Variables
 
+### Core
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `MCP_PORT` | 3000 | Server port |
+| `OPENAI_API_KEY` | (required) | OpenAI API key |
+| `LOG_LEVEL` | INFO | Logging level |
+
+### ChromaDB
+| Variable | Default | Description |
+|----------|---------|-------------|
 | `CHROMA_HOST` | localhost | ChromaDB host |
 | `CHROMA_PORT` | 8001 | ChromaDB port |
-| `OPENAI_API_KEY` | (required) | OpenAI API key for embeddings |
-| `OPENAI_EMBED_MODEL` | text-embedding-3-large | Embedding model |
-| `LOG_LEVEL` | INFO | Logging level |
+
+### V3: PostgreSQL
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `EVENTS_DB_DSN` | (required) | Postgres connection string |
+| `POSTGRES_POOL_MIN` | 2 | Min pool connections |
+| `POSTGRES_POOL_MAX` | 10 | Max pool connections |
+
+### V3: Event Extraction
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENAI_EVENT_MODEL` | gpt-4o-mini | Model for extraction |
+| `EVENT_MAX_ATTEMPTS` | 5 | Max retry attempts |
 
 ## Project Structure
 
@@ -157,12 +204,34 @@ mcp_memory/
 ├── .claude-workspace/          # Build artifacts
 │   ├── implementation/         # Source code
 │   │   └── mcp-server/         # MCP server implementation
+│   │       ├── src/
+│   │       │   ├── server.py          # Main MCP server
+│   │       │   ├── services/          # V3 services
+│   │       │   ├── storage/           # Postgres client
+│   │       │   ├── tools/             # Event tools
+│   │       │   └── worker/            # Event extraction worker
+│   │       └── migrations/            # SQL migrations
 │   ├── tests/                  # Test suites
 │   │   └── e2e/                # End-to-end tests
 │   └── deployment/             # Docker configs
 ├── CLAUDE.md                   # Project instructions
 └── README.md                   # This file
 ```
+
+## Event Categories
+
+V3 extracts 8 types of semantic events:
+
+| Category | Description |
+|----------|-------------|
+| Commitment | Promises, deadlines, deliverables |
+| Execution | Actions taken, completions |
+| Decision | Choices made, directions set |
+| Collaboration | Meetings, discussions, handoffs |
+| QualityRisk | Issues, blockers, concerns |
+| Feedback | User input, reviews, critiques |
+| Change | Modifications, pivots, updates |
+| Stakeholder | Who's involved, roles |
 
 ## License
 

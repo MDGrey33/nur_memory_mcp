@@ -1,8 +1,14 @@
 """
-MCP Memory Server v2.0 - Streamable HTTP Transport
+MCP Memory Server v3.0 - Streamable HTTP Transport
 
 A Model Context Protocol server that provides persistent memory and artifact storage
-with OpenAI embeddings, token-window chunking, and hybrid retrieval.
+with OpenAI embeddings, token-window chunking, hybrid retrieval, and semantic event extraction.
+
+V3 Features:
+- Semantic event extraction from artifacts using LLM
+- PostgreSQL storage for events, revisions, and job queue
+- Async event worker for background processing
+- Evidence linking to source text
 
 Usage:
     python server.py
@@ -54,11 +60,16 @@ from utils.errors import (
     NotFoundError
 )
 
+# V3: Postgres and event extraction imports
+from storage.postgres_client import PostgresClient
+from services.job_queue_service import JobQueueService
+from tools.event_tools import event_search, event_get, event_list_for_revision
+
 # Setup logging
 logger = logging.getLogger("mcp-memory")
 
 # Create FastMCP server
-mcp = FastMCP("MCP Memory v2.0")
+mcp = FastMCP("MCP Memory v3.0")
 
 # Global services (initialized in lifespan)
 config = None
@@ -67,6 +78,10 @@ chunking_service: Optional[ChunkingService] = None
 retrieval_service: Optional[RetrievalService] = None
 privacy_service: Optional[PrivacyFilterService] = None
 chroma_manager: Optional[ChromaClientManager] = None
+
+# V3: Postgres and job queue
+pg_client: Optional[PostgresClient] = None
+job_queue_service: Optional[JobQueueService] = None
 
 
 # ============================================================================
@@ -392,7 +407,7 @@ def history_get(
 # ============================================================================
 
 @mcp.tool()
-def artifact_ingest(
+async def artifact_ingest(
     artifact_type: str,
     source_system: str,
     content: str,
@@ -496,6 +511,16 @@ def artifact_ingest(
             "ingested_at": datetime.utcnow().isoformat() + "Z"
         }
 
+        # V3: Generate stable artifact_uid and revision_id
+        if source_id:
+            artifact_uid = "uid_" + hashlib.sha256(
+                f"{source_system}:{source_id}".encode()
+            ).hexdigest()[:16]
+        else:
+            artifact_uid = "uid_" + uuid4().hex[:16]
+
+        revision_id = "rev_" + content_hash[:16]
+
         if not should_chunk:
             # Store as single artifact
             logger.info(f"Ingesting unchunked artifact {artifact_id}: {token_count} tokens")
@@ -515,11 +540,47 @@ def artifact_ingest(
                 }]
             )
 
+            # V3: Write to Postgres and enqueue job
+            job_id = None
+            job_status = None
+            if pg_client and job_queue_service:
+                try:
+                    # Write revision to Postgres
+                    await pg_client.transaction([
+                        # Mark old revisions as not latest
+                        (
+                            "UPDATE artifact_revision SET is_latest = false WHERE artifact_uid = $1 AND is_latest = true",
+                            (artifact_uid,)
+                        ),
+                        # Insert new revision (include artifact_id for worker to fetch from ChromaDB)
+                        (
+                            """INSERT INTO artifact_revision
+                               (artifact_uid, revision_id, artifact_id, content_hash, token_count, is_chunked, chunk_count, is_latest, source_system, source_id, title)
+                               VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10)
+                               ON CONFLICT (artifact_uid, revision_id) DO NOTHING""",
+                            (artifact_uid, revision_id, artifact_id, content_hash, token_count, False, 0, source_system, source_id or "", title or "")
+                        )
+                    ])
+
+                    # Enqueue event extraction job
+                    job_uuid = await job_queue_service.enqueue_job(artifact_uid, revision_id)
+                    if job_uuid:
+                        job_id = str(job_uuid)
+                        job_status = "PENDING"
+                        logger.info(f"V3: Enqueued job {job_id} for {artifact_uid}/{revision_id}")
+
+                except Exception as e:
+                    logger.warning(f"V3: Failed to write to Postgres: {e}")
+
             return {
                 "artifact_id": artifact_id,
+                "artifact_uid": artifact_uid,
+                "revision_id": revision_id,
                 "is_chunked": False,
                 "num_chunks": 0,
-                "stored_ids": [artifact_id]
+                "stored_ids": [artifact_id],
+                "job_id": job_id,
+                "job_status": job_status
             }
 
         else:
@@ -588,11 +649,47 @@ def artifact_ingest(
 
             logger.info(f"Successfully ingested chunked artifact {artifact_id}")
 
+            # V3: Write to Postgres and enqueue job
+            job_id = None
+            job_status = None
+            if pg_client and job_queue_service:
+                try:
+                    # Write revision to Postgres (include artifact_id for worker to fetch from ChromaDB)
+                    await pg_client.transaction([
+                        # Mark old revisions as not latest
+                        (
+                            "UPDATE artifact_revision SET is_latest = false WHERE artifact_uid = $1 AND is_latest = true",
+                            (artifact_uid,)
+                        ),
+                        # Insert new revision
+                        (
+                            """INSERT INTO artifact_revision
+                               (artifact_uid, revision_id, artifact_id, content_hash, token_count, is_chunked, chunk_count, is_latest, source_system, source_id, title)
+                               VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10)
+                               ON CONFLICT (artifact_uid, revision_id) DO NOTHING""",
+                            (artifact_uid, revision_id, artifact_id, content_hash, token_count, True, len(chunks), source_system, source_id or "", title or "")
+                        )
+                    ])
+
+                    # Enqueue event extraction job
+                    job_uuid = await job_queue_service.enqueue_job(artifact_uid, revision_id)
+                    if job_uuid:
+                        job_id = str(job_uuid)
+                        job_status = "PENDING"
+                        logger.info(f"V3: Enqueued job {job_id} for {artifact_uid}/{revision_id}")
+
+                except Exception as e:
+                    logger.warning(f"V3: Failed to write to Postgres: {e}")
+
             return {
                 "artifact_id": artifact_id,
+                "artifact_uid": artifact_uid,
+                "revision_id": revision_id,
                 "is_chunked": True,
                 "num_chunks": len(chunks),
-                "stored_ids": [artifact_id] + chunk_ids
+                "stored_ids": [artifact_id] + chunk_ids,
+                "job_id": job_id,
+                "job_status": job_status
             }
 
     except ValidationError as e:
@@ -908,6 +1005,148 @@ def embedding_health() -> dict:
 
 
 # ============================================================================
+# V3 TOOLS - Semantic Events
+# ============================================================================
+
+@mcp.tool()
+async def event_search_tool(
+    query: Optional[str] = None,
+    limit: int = 20,
+    category: Optional[str] = None,
+    time_from: Optional[str] = None,
+    time_to: Optional[str] = None,
+    artifact_uid: Optional[str] = None,
+    include_evidence: bool = True
+) -> dict:
+    """
+    Search semantic events extracted from artifacts.
+
+    Args:
+        query: Full-text search on event narratives
+        limit: Maximum results (1-100)
+        category: Filter by category (Commitment, Execution, Decision, Collaboration, QualityRisk, Feedback, Change, Stakeholder)
+        time_from: Filter events after this time (ISO8601)
+        time_to: Filter events before this time (ISO8601)
+        artifact_uid: Filter to specific artifact
+        include_evidence: Include evidence quotes linking to source text
+    """
+    if not pg_client:
+        return {"error": "V3 features unavailable - PostgreSQL not configured", "error_code": "V3_UNAVAILABLE"}
+
+    return await event_search(
+        pg_client,
+        query=query,
+        limit=limit,
+        category=category,
+        time_from=time_from,
+        time_to=time_to,
+        artifact_uid=artifact_uid,
+        include_evidence=include_evidence
+    )
+
+
+@mcp.tool()
+async def event_get_tool(event_id: str) -> dict:
+    """
+    Get a single semantic event by ID with all evidence.
+
+    Args:
+        event_id: Event UUID (with or without evt_ prefix)
+    """
+    if not pg_client:
+        return {"error": "V3 features unavailable - PostgreSQL not configured", "error_code": "V3_UNAVAILABLE"}
+
+    return await event_get(pg_client, event_id)
+
+
+@mcp.tool()
+async def event_list_for_artifact(
+    artifact_uid: str,
+    revision_id: Optional[str] = None,
+    include_evidence: bool = False
+) -> dict:
+    """
+    List all semantic events for an artifact revision.
+
+    Args:
+        artifact_uid: Artifact UID (uid_...)
+        revision_id: Specific revision (defaults to latest)
+        include_evidence: Include evidence quotes
+    """
+    if not pg_client:
+        return {"error": "V3 features unavailable - PostgreSQL not configured", "error_code": "V3_UNAVAILABLE"}
+
+    return await event_list_for_revision(
+        pg_client,
+        artifact_uid=artifact_uid,
+        revision_id=revision_id,
+        include_evidence=include_evidence
+    )
+
+
+@mcp.tool()
+async def event_reextract(
+    artifact_uid: str,
+    revision_id: Optional[str] = None,
+    force: bool = False
+) -> dict:
+    """
+    Force re-extraction of events for an artifact revision.
+
+    Args:
+        artifact_uid: Artifact UID (uid_...)
+        revision_id: Specific revision (defaults to latest)
+        force: If True, reset even if job is already DONE
+    """
+    if not pg_client or not job_queue_service:
+        return {"error": "V3 features unavailable - PostgreSQL not configured", "error_code": "V3_UNAVAILABLE"}
+
+    try:
+        return await job_queue_service.force_reextract(
+            artifact_uid=artifact_uid,
+            revision_id=revision_id,
+            force=force
+        )
+    except Exception as e:
+        logger.error(f"event_reextract error: {e}", exc_info=True)
+        return {"error": str(e), "error_code": "INTERNAL_ERROR"}
+
+
+@mcp.tool()
+async def job_status(
+    artifact_uid: str,
+    revision_id: Optional[str] = None
+) -> dict:
+    """
+    Check event extraction job status for an artifact.
+
+    Args:
+        artifact_uid: Artifact UID (uid_...)
+        revision_id: Specific revision (defaults to latest)
+    """
+    if not pg_client or not job_queue_service:
+        return {"error": "V3 features unavailable - PostgreSQL not configured", "error_code": "V3_UNAVAILABLE"}
+
+    try:
+        result = await job_queue_service.get_job_status(
+            artifact_uid=artifact_uid,
+            revision_id=revision_id
+        )
+
+        if result is None:
+            return {
+                "error": f"No job found for {artifact_uid}",
+                "error_code": "NOT_FOUND"
+            }
+
+        return result
+
+    except Exception as e:
+        logger.error(f"job_status error: {e}", exc_info=True)
+        return {"error": str(e), "error_code": "INTERNAL_ERROR"}
+
+
+# ============================================================================
 # APPLICATION LIFECYCLE
 # ============================================================================
 
@@ -919,9 +1158,10 @@ async def lifespan(app):
     """Application lifespan - startup/shutdown."""
     global config, embedding_service, chunking_service, retrieval_service
     global privacy_service, chroma_manager, session_manager
+    global pg_client, job_queue_service  # V3
 
     logger.info("=" * 60)
-    logger.info("Starting MCP Memory Server v2.0")
+    logger.info("Starting MCP Memory Server v3.0")
     logger.info("=" * 60)
 
     try:
@@ -990,6 +1230,31 @@ async def lifespan(app):
         privacy_service = PrivacyFilterService()
         logger.info("  PrivacyFilterService: OK (v2 placeholder)")
 
+        # V3: Initialize Postgres client
+        logger.info("Initializing PostgreSQL (V3)...")
+        try:
+            pg_client = PostgresClient(
+                dsn=config.events_db_dsn,
+                min_pool_size=config.postgres_pool_min,
+                max_pool_size=config.postgres_pool_max
+            )
+            await pg_client.connect()
+
+            pg_health = await pg_client.health_check()
+            if pg_health["status"] != "healthy":
+                raise RuntimeError(f"Postgres unhealthy: {pg_health.get('error')}")
+
+            logger.info(f"  PostgreSQL: OK (pool {config.postgres_pool_min}-{config.postgres_pool_max})")
+
+            # V3: Initialize job queue service
+            job_queue_service = JobQueueService(pg_client, config.event_max_attempts)
+            logger.info(f"  JobQueueService: OK (max attempts={config.event_max_attempts})")
+
+        except Exception as e:
+            logger.warning(f"  PostgreSQL: UNAVAILABLE ({e}) - V3 features disabled")
+            pg_client = None
+            job_queue_service = None
+
         # Create session manager
         session_manager = StreamableHTTPSessionManager(
             app=mcp._mcp_server,
@@ -1000,7 +1265,7 @@ async def lifespan(app):
         # Run session manager
         async with session_manager.run():
             logger.info("=" * 60)
-            logger.info(f"MCP Memory Server v2.0 ready at http://0.0.0.0:{config.mcp_port}/mcp/")
+            logger.info(f"MCP Memory Server v3.0 ready at http://0.0.0.0:{config.mcp_port}/mcp/")
             logger.info("=" * 60)
             yield
 
@@ -1008,7 +1273,7 @@ async def lifespan(app):
         logger.error(f"Failed to start server: {e}", exc_info=True)
         raise
 
-    logger.info("MCP Memory Server v2.0 stopped")
+    logger.info("MCP Memory Server v3.0 stopped")
 
 
 async def health(request):
@@ -1016,7 +1281,7 @@ async def health(request):
     health_data = {
         "status": "ok",
         "service": "mcp-memory",
-        "version": "2.0.0"
+        "version": "3.0.0"
     }
 
     # Add detailed checks if services initialized
@@ -1025,6 +1290,13 @@ async def health(request):
 
     if embedding_service:
         health_data["openai"] = embedding_service.health_check()
+
+    # V3: Add Postgres health
+    if pg_client:
+        health_data["postgres"] = await pg_client.health_check()
+        health_data["v3_enabled"] = True
+    else:
+        health_data["v3_enabled"] = False
 
     return JSONResponse(health_data)
 
@@ -1067,7 +1339,7 @@ if __name__ == "__main__":
         logger.error(f"Failed to load config: {e}")
         port = 3000
 
-    logger.info(f"Starting MCP Memory Server v2.0 on port {port}")
+    logger.info(f"Starting MCP Memory Server v3.0 on port {port}")
 
     uvicorn.run(
         app,

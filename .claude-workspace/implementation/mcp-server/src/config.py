@@ -17,6 +17,9 @@ class Config:
     openai_max_retries: int
     openai_batch_size: int
 
+    # V3: OpenAI Event Extraction Model
+    openai_event_model: str
+
     # Chunking Configuration
     single_piece_max_tokens: int
     chunk_target_tokens: int
@@ -25,6 +28,16 @@ class Config:
     # ChromaDB Configuration
     chroma_host: str
     chroma_port: int
+
+    # V3: Postgres Configuration
+    events_db_dsn: str
+    postgres_pool_min: int
+    postgres_pool_max: int
+
+    # V3: Worker Configuration
+    worker_id: Optional[str]
+    poll_interval_ms: int
+    event_max_attempts: int
 
     # Server Configuration
     mcp_port: int
@@ -61,6 +74,9 @@ def load_config() -> Config:
         openai_max_retries=int(os.getenv("OPENAI_MAX_RETRIES", "3")),
         openai_batch_size=int(os.getenv("OPENAI_BATCH_SIZE", "100")),
 
+        # V3: OpenAI Event Extraction
+        openai_event_model=os.getenv("OPENAI_EVENT_MODEL", "gpt-4o-mini"),
+
         # Chunking
         single_piece_max_tokens=int(os.getenv("SINGLE_PIECE_MAX_TOKENS", "1200")),
         chunk_target_tokens=int(os.getenv("CHUNK_TARGET_TOKENS", "900")),
@@ -69,6 +85,16 @@ def load_config() -> Config:
         # ChromaDB
         chroma_host=os.getenv("CHROMA_HOST", "localhost"),
         chroma_port=int(os.getenv("CHROMA_PORT", "8001")),
+
+        # V3: Postgres
+        events_db_dsn=os.getenv("EVENTS_DB_DSN", "postgresql://events:events@localhost:5432/events"),
+        postgres_pool_min=int(os.getenv("POSTGRES_POOL_MIN", "2")),
+        postgres_pool_max=int(os.getenv("POSTGRES_POOL_MAX", "10")),
+
+        # V3: Worker
+        worker_id=os.getenv("WORKER_ID"),  # Optional, only for worker processes
+        poll_interval_ms=int(os.getenv("POLL_INTERVAL_MS", "1000")),
+        event_max_attempts=int(os.getenv("EVENT_MAX_ATTEMPTS", "5")),
 
         # Server
         mcp_port=int(os.getenv("MCP_PORT", "3000")),

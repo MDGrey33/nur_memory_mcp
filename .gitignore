@@ -60,8 +60,11 @@ temp/
 tmp/
 *.tmp
 
-# Screenshots (test artifacts)
+# Test artifacts
 .claude-workspace/tests/e2e/screenshots/
+.claude-workspace/tests/ui/screenshots/
+*_results.json
+*_report.json
 
 # Secrets
 secrets/

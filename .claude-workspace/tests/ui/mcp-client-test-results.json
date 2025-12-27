@@ -1,0 +1,149 @@
+{
+  "summary": {
+    "total": 10,
+    "passed": 0,
+    "failed": 10,
+    "pass_rate": "0.0%",
+    "elapsed_seconds": 0.05,
+    "timestamp": "2025-12-27T17:53:27.326111"
+  },
+  "environment": {
+    "mcp_server": "http://localhost:3000",
+    "version": "3.0.0"
+  },
+  "tests": [
+    {
+      "name": "Server Health",
+      "tool": "embedding_health",
+      "params": {},
+      "passed": false,
+      "elapsed_ms": 7,
+      "result": "No valid response",
+      "timestamp": "2025-12-27T17:53:27.284008"
+    },
+    {
+      "name": "memory_store",
+      "tool": "memory_store",
+      "params": {
+        "content": "MCP Client Test: The user prefers dark mode interfaces.",
+        "category": "preference",
+        "source": "ui-test",
+        "importance": 0.8
+      },
+      "passed": false,
+      "elapsed_ms": 6,
+      "result": "No valid response",
+      "timestamp": "2025-12-27T17:53:27.290248"
+    },
+    {
+      "name": "memory_search",
+      "tool": "memory_search",
+      "params": {
+        "query": "dark mode preference",
+        "limit": 5
+      },
+      "passed": false,
+      "elapsed_ms": 5,
+      "result": "No valid response",
+      "timestamp": "2025-12-27T17:53:27.295482"
+    },
+    {
+      "name": "memory_list",
+      "tool": "memory_list",
+      "params": {
+        "category": "preference",
+        "limit": 10
+      },
+      "passed": false,
+      "elapsed_ms": 4,
+      "result": "No valid response",
+      "timestamp": "2025-12-27T17:53:27.300310"
+    },
+    {
+      "name": "history_append",
+      "tool": "history_append",
+      "params": {
+        "session_id": "ui-test-session",
+        "role": "user",
+        "content": "This is a test message from the MCP client UI test.",
+        "metadata": {
+          "test": true
+        }
+      },
+      "passed": false,
+      "elapsed_ms": 5,
+      "result": "No valid response",
+      "timestamp": "2025-12-27T17:53:27.305935"
+    },
+    {
+      "name": "history_get",
+      "tool": "history_get",
+      "params": {
+        "session_id": "ui-test-session",
+        "limit": 10
+      },
+      "passed": false,
+      "elapsed_ms": 4,
+      "result": "No valid response",
+      "timestamp": "2025-12-27T17:53:27.310299"
+    },
+    {
+      "name": "artifact_ingest",
+      "tool": "artifact_ingest",
+      "params": {
+        "artifact_type": "note",
+        "source_system": "ui-test",
+        "content": "MCP Client UI Test Document\n\nDate: January 2025\nAuthor: Automated Test\n\nDECISIONS:\n1. The test decided to verify all 17 MCP tools work correctly.\n2. We agreed to use JSON-RPC over Streamable HTTP.\n\nCOMMITMENTS:\n- Test automation will run health checks daily.\n- Results will be logged for review.\n\nRISKS:\n- Network timeouts could cause false failures.\n",
+        "title": "MCP Client UI Test Document",
+        "source_id": "ui-test-1766850807",
+        "participants": [
+          "Test Automation"
+        ]
+      },
+      "passed": false,
+      "elapsed_ms": 3,
+      "result": "No valid response",
+      "timestamp": "2025-12-27T17:53:27.314168"
+    },
+    {
+      "name": "artifact_search",
+      "tool": "artifact_search",
+      "params": {
+        "query": "MCP tools verification",
+        "limit": 5
+      },
+      "passed": false,
+      "elapsed_ms": 3,
+      "result": "No valid response",
+      "timestamp": "2025-12-27T17:53:27.317885"
+    },
+    {
+      "name": "hybrid_search",
+      "tool": "hybrid_search",
+      "params": {
+        "query": "test automation preferences",
+        "collections": [
+          "memories",
+          "artifacts"
+        ],
+        "limit": 5
+      },
+      "passed": false,
+      "elapsed_ms": 4,
+      "result": "No valid response",
+      "timestamp": "2025-12-27T17:53:27.322083"
+    },
+    {
+      "name": "event_search",
+      "tool": "event_search",
+      "params": {
+        "query": "test",
+        "limit": 10
+      },
+      "passed": false,
+      "elapsed_ms": 4,
+      "result": "No valid response",
+      "timestamp": "2025-12-27T17:53:27.326099"
+    }
+  ]
+}
