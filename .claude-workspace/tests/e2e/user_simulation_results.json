@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-12-27T20:46:28.225309",
+  "timestamp": "2025-12-27T21:11:10.455103",
   "passed": 22,
   "failed": 0,
   "skipped": 0,
@@ -17,7 +17,7 @@
     {
       "status": "PASS",
       "test": "memory_store",
-      "details": "Stored: Stored memory [mem_65e516e66d9c]: User prefers Python for backend development and React for fr..."
+      "details": "Stored: Stored memory [mem_d5868989517a]: User prefers Python for backend development and React for fr..."
     },
     {
       "status": "PASS",
@@ -32,7 +32,7 @@
     {
       "status": "PASS",
       "test": "history_append",
-      "details": "Appended to test-conv-99685471"
+      "details": "Appended to test-conv-bd55bac0"
     },
     {
       "status": "PASS",
@@ -42,7 +42,7 @@
     {
       "status": "PASS",
       "test": "artifact_ingest (small)",
-      "details": "Ingested: {\n  \"artifact_id\": \"art_0ca5ab53\",\n  \"artifact_uid\": \"uid_0ca5ab539b43aa77\",\n  \"revision_id\": \"rev_4"
+      "details": "Ingested: {\n  \"artifact_id\": \"art_49107d54\",\n  \"artifact_uid\": \"uid_49107d54296dffbf\",\n  \"revision_id\": \"rev_4"
     },
     {
       "status": "PASS",
@@ -57,7 +57,7 @@
     {
       "status": "PASS",
       "test": "artifact_get",
-      "details": "Retrieved art_0ca5ab53"
+      "details": "Retrieved art_49107d54"
     },
     {
       "status": "PASS",
@@ -67,12 +67,12 @@
     {
       "status": "PASS",
       "test": "V3 artifact_ingest",
-      "details": "uid=uid_8a09d7d130bcd4cb, rev=rev_f07643bffa503bcc"
+      "details": "uid=uid_2d4f6ce24419fad4, rev=rev_f07643bffa503bcc"
     },
     {
       "status": "PASS",
       "test": "V3 job_status",
-      "details": "Status: {\n  \"job_id\": \"f1d69005-193f-4a43-95b9-bf5c7b5d2269\",\n  \"artifact_uid\": \"uid_8a09d7d130bcd4cb\",\n  \"r"
+      "details": "Status: {\n  \"job_id\": \"8327c44a-58e8-48a5-81c0-140a63f82a00\",\n  \"artifact_uid\": \"uid_2d4f6ce24419fad4\",\n  \"r"
     },
     {
       "status": "PASS",
@@ -82,22 +82,22 @@
     {
       "status": "PASS",
       "test": "V3 event_search",
-      "details": "Found events: {\n  \"events\": [\n    {\n      \"event_id\": \"e58300fc-6c3e-4b07-9e27-5da2a15ca254\",\n      \"artifact_uid\""
+      "details": "Found events: {\n  \"events\": [\n    {\n      \"event_id\": \"8f47f69b-bea9-4509-8551-06852032e055\",\n      \"artifact_uid\""
     },
     {
       "status": "PASS",
       "test": "V3 event_list_for_artifact",
-      "details": "Listed events: {\n  \"artifact_uid\": \"uid_8a09d7d130bcd4cb\",\n  \"revision_id\": \"rev_f07643bffa503bcc\",\n  \"is_latest\": "
+      "details": "Listed events: {\n  \"artifact_uid\": \"uid_2d4f6ce24419fad4\",\n  \"revision_id\": \"rev_f07643bffa503bcc\",\n  \"is_latest\": "
     },
     {
       "status": "PASS",
       "test": "V3 event_get",
-      "details": "Got event: {\n  \"event_id\": \"e58300fc-6c3e-4b07-9e27-5da2a15ca254\",\n  \"artifact_uid\": \"uid_cc2e1798ce2db657\",\n  "
+      "details": "Got event: {\n  \"event_id\": \"8f47f69b-bea9-4509-8551-06852032e055\",\n  \"artifact_uid\": \"uid_cc2e1798ce2db657\",\n  "
     },
     {
       "status": "PASS",
       "test": "V3 event_reextract",
-      "details": "Response: {\n  \"job_id\": \"f1d69005-193f-4a43-95b9-bf5c7b5d2269\",\n  \"artifact_uid\": \"uid_8a09d7d130bcd4cb\",\n  \"r"
+      "details": "Response: {\n  \"job_id\": \"8327c44a-58e8-48a5-81c0-140a63f82a00\",\n  \"artifact_uid\": \"uid_2d4f6ce24419fad4\",\n  \"r"
     },
     {
       "status": "PASS",
@@ -107,12 +107,12 @@
     {
       "status": "PASS",
       "test": "memory_delete",
-      "details": "Deleted mem_65e516e66d9c"
+      "details": "Deleted mem_d5868989517a"
     },
     {
       "status": "PASS",
       "test": "artifact_delete",
-      "details": "Deleted art_0ca5ab53"
+      "details": "Deleted art_49107d54"
     }
   ]
 }

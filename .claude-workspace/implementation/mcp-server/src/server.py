@@ -1125,6 +1125,38 @@ def embedding_health() -> dict:
 # V3 TOOLS - Semantic Events
 # ============================================================================
 
+async def resolve_artifact_uid(identifier: str) -> Optional[str]:
+    """
+    Resolve an artifact identifier to artifact_uid.
+
+    Accepts either:
+    - artifact_id (art_xxx) - looks up artifact_uid from Postgres
+    - artifact_uid (uid_xxx) - returns as-is
+
+    Returns None if not found.
+    """
+    if not pg_client:
+        return None
+
+    # If already a uid_, return as-is
+    if identifier.startswith("uid_"):
+        return identifier
+
+    # If art_, look up the uid from Postgres
+    if identifier.startswith("art_"):
+        try:
+            result = await pg_client.fetch_one(
+                "SELECT artifact_uid FROM artifact_revision WHERE artifact_id = $1 AND is_latest = true",
+                identifier
+            )
+            if result:
+                return result["artifact_uid"]
+        except Exception as e:
+            logger.warning(f"Failed to resolve artifact_uid for {identifier}: {e}")
+
+    return None
+
+
 @mcp.tool()
 async def event_search_tool(
     query: Optional[str] = None,
@@ -1132,7 +1164,7 @@ async def event_search_tool(
     category: Optional[str] = None,
     time_from: Optional[str] = None,
     time_to: Optional[str] = None,
-    artifact_uid: Optional[str] = None,
+    artifact_id: Optional[str] = None,
     include_evidence: bool = True
 ) -> dict:
     """
@@ -1151,11 +1183,18 @@ async def event_search_tool(
         category: Commitment, Execution, Decision, Collaboration, QualityRisk, Feedback, Change, Stakeholder
         time_from: Filter events after this time (ISO8601)
         time_to: Filter events before this time (ISO8601)
-        artifact_uid: Filter to specific artifact
+        artifact_id: Filter to specific artifact (accepts art_xxx or uid_xxx)
         include_evidence: Include evidence quotes linking to source text
     """
     if not pg_client:
         return {"error": "V3 features unavailable - PostgreSQL not configured", "error_code": "V3_UNAVAILABLE"}
+
+    # Resolve artifact_id to artifact_uid if provided
+    resolved_uid = None
+    if artifact_id:
+        resolved_uid = await resolve_artifact_uid(artifact_id)
+        if not resolved_uid:
+            return {"error": f"Artifact {artifact_id} not found", "error_code": "NOT_FOUND"}
 
     return await event_search(
         pg_client,
@@ -1164,7 +1203,7 @@ async def event_search_tool(
         category=category,
         time_from=time_from,
         time_to=time_to,
-        artifact_uid=artifact_uid,
+        artifact_uid=resolved_uid,
         include_evidence=include_evidence
     )
 
@@ -1185,7 +1224,7 @@ async def event_get_tool(event_id: str) -> dict:
 
 @mcp.tool()
 async def event_list_for_artifact(
-    artifact_uid: str,
+    artifact_id: str,
     revision_id: Optional[str] = None,
     include_evidence: bool = False
 ) -> dict:
@@ -1193,16 +1232,21 @@ async def event_list_for_artifact(
     List all semantic events for an artifact revision.
 
     Args:
-        artifact_uid: Artifact UID (uid_...)
+        artifact_id: Artifact identifier (accepts art_xxx or uid_xxx)
         revision_id: Specific revision (defaults to latest)
         include_evidence: Include evidence quotes
     """
     if not pg_client:
         return {"error": "V3 features unavailable - PostgreSQL not configured", "error_code": "V3_UNAVAILABLE"}
 
+    # Resolve to artifact_uid
+    resolved_uid = await resolve_artifact_uid(artifact_id)
+    if not resolved_uid:
+        return {"error": f"Artifact {artifact_id} not found", "error_code": "NOT_FOUND"}
+
     return await event_list_for_revision(
         pg_client,
-        artifact_uid=artifact_uid,
+        artifact_uid=resolved_uid,
         revision_id=revision_id,
         include_evidence=include_evidence
     )
@@ -1210,7 +1254,7 @@ async def event_list_for_artifact(
 
 @mcp.tool()
 async def event_reextract(
-    artifact_uid: str,
+    artifact_id: str,
     revision_id: Optional[str] = None,
     force: bool = False
 ) -> dict:
@@ -1218,16 +1262,21 @@ async def event_reextract(
     Force re-extraction of events for an artifact revision.
 
     Args:
-        artifact_uid: Artifact UID (uid_...)
+        artifact_id: Artifact identifier (accepts art_xxx or uid_xxx)
         revision_id: Specific revision (defaults to latest)
         force: If True, reset even if job is already DONE
     """
     if not pg_client or not job_queue_service:
         return {"error": "V3 features unavailable - PostgreSQL not configured", "error_code": "V3_UNAVAILABLE"}
 
+    # Resolve to artifact_uid
+    resolved_uid = await resolve_artifact_uid(artifact_id)
+    if not resolved_uid:
+        return {"error": f"Artifact {artifact_id} not found", "error_code": "NOT_FOUND"}
+
     try:
         return await job_queue_service.force_reextract(
-            artifact_uid=artifact_uid,
+            artifact_uid=resolved_uid,
             revision_id=revision_id,
             force=force
         )
@@ -1238,28 +1287,33 @@ async def event_reextract(
 
 @mcp.tool()
 async def job_status(
-    artifact_uid: str,
+    artifact_id: str,
     revision_id: Optional[str] = None
 ) -> dict:
     """
     Check event extraction job status for an artifact.
 
     Args:
-        artifact_uid: Artifact UID (uid_...)
+        artifact_id: Artifact identifier (accepts art_xxx or uid_xxx)
         revision_id: Specific revision (defaults to latest)
     """
     if not pg_client or not job_queue_service:
         return {"error": "V3 features unavailable - PostgreSQL not configured", "error_code": "V3_UNAVAILABLE"}
 
+    # Resolve to artifact_uid
+    resolved_uid = await resolve_artifact_uid(artifact_id)
+    if not resolved_uid:
+        return {"error": f"Artifact {artifact_id} not found", "error_code": "NOT_FOUND"}
+
     try:
         result = await job_queue_service.get_job_status(
-            artifact_uid=artifact_uid,
+            artifact_uid=resolved_uid,
             revision_id=revision_id
         )
 
         if result is None:
             return {
-                "error": f"No job found for {artifact_uid}",
+                "error": f"No job found for {artifact_id}",
                 "error_code": "NOT_FOUND"
             }
 
