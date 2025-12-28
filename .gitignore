@@ -70,3 +70,6 @@ tmp/
 secrets/
 *.pem
 *.key
+
+# Test results
+*_results.json
