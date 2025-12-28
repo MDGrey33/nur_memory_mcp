@@ -1,15 +1,13 @@
-# MCP Memory Server v3.0
+# MCP Memory Server v4.0
 
-A Model Context Protocol (MCP) server for persistent memory and context management with **semantic event extraction**. Provides semantic search, artifact storage, and intelligent event analysis.
+A Model Context Protocol (MCP) server for persistent memory and context management with **semantic event extraction** and **graph-backed context expansion (V4)**. Provides semantic search, artifact storage, and event + entity context packs.
 
-## What's New in V3
+## What's New in V4
 
-- **Semantic Event Extraction** - Automatically extracts commitments, decisions, risks from documents
-- **Evidence Linking** - Every extracted event includes source quotes with character offsets
-- **PostgreSQL Storage** - Events stored in Postgres with full-text search
-- **Async Worker Pipeline** - Background event extraction with retry logic
-- **Source Metadata** - Track document dates, source types, and author context for credibility reasoning
-- **Hybrid Search with Events** - Search across artifacts AND events in one query
+- **Graph-backed context expansion** - `hybrid_search(graph_expand=true)` can return `related_context[]` and `entities[]` using a 1-hop graph traversal (Apache AGE in Postgres)
+- **Static capability metadata** - `hybrid_search` always returns `expand_options[]` so clients can drive better UX / follow-up prompting
+- **Quality-tuned defaults** - `graph_expand=true`, `graph_seed_limit=1`, `graph_filters=["Decision","Commitment","QualityRisk"]` (opt out via `null`)
+- **Noise reduction** - default vector distance cutoff filters low-quality hits from `primary_results`
 
 ## Features
 
@@ -60,9 +58,10 @@ A Model Context Protocol (MCP) server for persistent memory and context manageme
 ### Start the Server
 
 ```bash
-# Start services with Docker Compose
-cd .claude-workspace/deployment
-docker-compose up -d
+# Start services with Docker Compose (V4)
+cd .claude-workspace/deployment/v4/docker
+cp ../env.v4.example .env
+docker compose -f docker-compose.v4.yml up -d
 
 # Or manually:
 cd .claude-workspace/implementation/mcp-server
@@ -73,7 +72,7 @@ python src/server.py
 python -m src.worker
 ```
 
-Server runs at: `http://localhost:3001/mcp/`
+Server runs at: `http://localhost:3000/mcp/`
 
 ### HTTPS Access (via ngrok)
 
@@ -95,7 +94,7 @@ Edit `~/.cursor/mcp.json`:
 {
   "mcpServers": {
     "memory": {
-      "url": "http://localhost:3001/mcp/"
+      "url": "http://localhost:3000/mcp/"
     }
   }
 }
@@ -103,7 +102,7 @@ Edit `~/.cursor/mcp.json`:
 
 ### Claude Desktop / Claude.ai
 
-1. Start ngrok: `ngrok http 3001`
+1. Start ngrok: `ngrok http 3000`
 2. Open **Claude Desktop** or **Claude.ai** (web)
 3. Go to **Settings** → **Connectors**
 4. Click **Add Custom Connector**
@@ -142,7 +141,206 @@ python test_samples.py all
 ### Health Check
 
 ```bash
-curl http://localhost:3001/health
+curl http://localhost:3000/health
+```
+
+## Graph Visualization (V4: Apache AGE → Neo4j Browser)
+
+V4 materializes an **Apache AGE** graph (inside Postgres) for context expansion. The most convenient way to *visually* explore it is to export it to CSV and load it into **Neo4j**, then use **Neo4j Browser**.
+
+### What this shows (important)
+
+- **Neo4j will show all nodes/edges that you exported and imported**, not a live view of Postgres/AGE.
+- If your graph is large, prefer visualizing *subgraphs* (limits) instead of attempting to render everything at once.
+
+### 1) Export the AGE graph (`nur`) from Postgres to CSV
+
+This repo’s AGE graph name is `nur` (see `GraphService` default).
+
+From the repo root:
+
+```bash
+mkdir -p temp/neo4j_import
+
+# Export nodes + edges from AGE to CSV (host files)
+docker exec -i postgres-v4 psql -U events -d events -v ON_ERROR_STOP=1 <<'SQL' | sed '1,2d' > temp/neo4j_import/entities.csv
+LOAD 'age';
+SET search_path = ag_catalog, public;
+COPY (
+  SELECT
+    trim(both '"' from entity_id::text) AS entity_id,
+    trim(both '"' from canonical_name::text) AS canonical_name,
+    trim(both '"' from type::text) AS type,
+    nullif(trim(both '"' from coalesce(role::text,'')), '') AS role,
+    nullif(trim(both '"' from coalesce(organization::text,'')), '') AS organization
+  FROM cypher('nur', $$
+    MATCH (e:Entity)
+    RETURN e.entity_id AS entity_id,
+           e.canonical_name AS canonical_name,
+           e.type AS type,
+           e.role AS role,
+           e.organization AS organization
+  $$) AS (entity_id agtype, canonical_name agtype, type agtype, role agtype, organization agtype)
+) TO STDOUT WITH (FORMAT csv, HEADER true);
+SQL
+
+docker exec -i postgres-v4 psql -U events -d events -v ON_ERROR_STOP=1 <<'SQL' | sed '1,2d' > temp/neo4j_import/events.csv
+LOAD 'age';
+SET search_path = ag_catalog, public;
+COPY (
+  SELECT
+    trim(both '"' from event_id::text) AS event_id,
+    trim(both '"' from category::text) AS category,
+    trim(both '"' from narrative::text) AS narrative,
+    trim(both '"' from artifact_uid::text) AS artifact_uid,
+    trim(both '"' from revision_id::text) AS revision_id,
+    nullif(trim(both '"' from coalesce(event_time::text,'')), '') AS event_time,
+    (trim(both '"' from confidence::text)) AS confidence
+  FROM cypher('nur', $$
+    MATCH (ev:Event)
+    RETURN ev.event_id AS event_id,
+           ev.category AS category,
+           ev.narrative AS narrative,
+           ev.artifact_uid AS artifact_uid,
+           ev.revision_id AS revision_id,
+           ev.event_time AS event_time,
+           ev.confidence AS confidence
+  $$) AS (event_id agtype, category agtype, narrative agtype, artifact_uid agtype, revision_id agtype, event_time agtype, confidence agtype)
+) TO STDOUT WITH (FORMAT csv, HEADER true);
+SQL
+
+docker exec -i postgres-v4 psql -U events -d events -v ON_ERROR_STOP=1 <<'SQL' | sed '1,2d' > temp/neo4j_import/acted_in.csv
+LOAD 'age';
+SET search_path = ag_catalog, public;
+COPY (
+  SELECT
+    trim(both '"' from entity_id::text) AS entity_id,
+    trim(both '"' from event_id::text) AS event_id,
+    nullif(trim(both '"' from coalesce(role::text,'')), '') AS role
+  FROM cypher('nur', $$
+    MATCH (e:Entity)-[r:ACTED_IN]->(ev:Event)
+    RETURN e.entity_id AS entity_id,
+           ev.event_id AS event_id,
+           r.role AS role
+  $$) AS (entity_id agtype, event_id agtype, role agtype)
+) TO STDOUT WITH (FORMAT csv, HEADER true);
+SQL
+
+docker exec -i postgres-v4 psql -U events -d events -v ON_ERROR_STOP=1 <<'SQL' | sed '1,2d' > temp/neo4j_import/about.csv
+LOAD 'age';
+SET search_path = ag_catalog, public;
+COPY (
+  SELECT
+    trim(both '"' from event_id::text) AS event_id,
+    trim(both '"' from entity_id::text) AS entity_id
+  FROM cypher('nur', $$
+    MATCH (ev:Event)-[:ABOUT]->(e:Entity)
+    RETURN ev.event_id AS event_id,
+           e.entity_id AS entity_id
+  $$) AS (event_id agtype, entity_id agtype)
+) TO STDOUT WITH (FORMAT csv, HEADER true);
+SQL
+
+docker exec -i postgres-v4 psql -U events -d events -v ON_ERROR_STOP=1 <<'SQL' | sed '1,2d' > temp/neo4j_import/possibly_same.csv
+LOAD 'age';
+SET search_path = ag_catalog, public;
+COPY (
+  SELECT
+    trim(both '"' from entity_a_id::text) AS entity_a_id,
+    trim(both '"' from entity_b_id::text) AS entity_b_id,
+    (trim(both '"' from confidence::text)) AS confidence,
+    nullif(trim(both '"' from coalesce(reason::text,'')), '') AS reason
+  FROM cypher('nur', $$
+    MATCH (a:Entity)-[r:POSSIBLY_SAME]->(b:Entity)
+    RETURN a.entity_id AS entity_a_id,
+           b.entity_id AS entity_b_id,
+           r.confidence AS confidence,
+           r.reason AS reason
+  $$) AS (entity_a_id agtype, entity_b_id agtype, confidence agtype, reason agtype)
+) TO STDOUT WITH (FORMAT csv, HEADER true);
+SQL
+```
+
+### 2) Run Neo4j locally (Docker) for visualization
+
+Start Neo4j with the CSVs mounted:
+
+```bash
+docker rm -f neo4j-local >/dev/null 2>&1 || true
+docker run -d --name neo4j-local \
+  -p 7474:7474 -p 7687:7687 \
+  -e NEO4J_AUTH=none \
+  -v "$PWD/temp/neo4j_import:/import" \
+  neo4j:5
+```
+
+Open Neo4j Browser:
+- `http://localhost:7474/browser/`
+
+### 3) Import into Neo4j (from CSV)
+
+```bash
+docker exec -i neo4j-local cypher-shell -a bolt://localhost:7687 <<'CYPHER'
+CREATE CONSTRAINT entity_id IF NOT EXISTS FOR (e:Entity) REQUIRE e.entity_id IS UNIQUE;
+CREATE CONSTRAINT event_id IF NOT EXISTS FOR (e:Event) REQUIRE e.event_id IS UNIQUE;
+
+LOAD CSV WITH HEADERS FROM 'file:///entities.csv' AS row
+MERGE (e:Entity {entity_id: row.entity_id})
+SET e.canonical_name = row.canonical_name,
+    e.type = row.type,
+    e.role = CASE WHEN row.role = '' THEN null ELSE row.role END,
+    e.organization = CASE WHEN row.organization = '' THEN null ELSE row.organization END;
+
+LOAD CSV WITH HEADERS FROM 'file:///events.csv' AS row
+MERGE (ev:Event {event_id: row.event_id})
+SET ev.category = row.category,
+    ev.narrative = row.narrative,
+    ev.artifact_uid = row.artifact_uid,
+    ev.revision_id = row.revision_id,
+    ev.event_time = CASE WHEN row.event_time = '' THEN null ELSE row.event_time END,
+    ev.confidence = CASE WHEN row.confidence = '' THEN null ELSE toFloat(row.confidence) END;
+
+LOAD CSV WITH HEADERS FROM 'file:///acted_in.csv' AS row
+MATCH (e:Entity {entity_id: row.entity_id})
+MATCH (ev:Event {event_id: row.event_id})
+MERGE (e)-[r:ACTED_IN]->(ev)
+SET r.role = CASE WHEN row.role = '' THEN null ELSE row.role END;
+
+LOAD CSV WITH HEADERS FROM 'file:///about.csv' AS row
+MATCH (ev:Event {event_id: row.event_id})
+MATCH (e:Entity {entity_id: row.entity_id})
+MERGE (ev)-[:ABOUT]->(e);
+
+LOAD CSV WITH HEADERS FROM 'file:///possibly_same.csv' AS row
+MATCH (a:Entity {entity_id: row.entity_a_id})
+MATCH (b:Entity {entity_id: row.entity_b_id})
+MERGE (a)-[r:POSSIBLY_SAME]->(b)
+SET r.confidence = CASE WHEN row.confidence = '' THEN null ELSE toFloat(row.confidence) END,
+    r.reason = CASE WHEN row.reason = '' THEN null ELSE row.reason END;
+CYPHER
+```
+
+### 4) Visualize in Neo4j Browser
+
+Run:
+
+```cypher
+MATCH (n)-[r]->(m)
+RETURN n,r,m
+LIMIT 50;
+```
+
+Confirm counts:
+
+```cypher
+MATCH (n) RETURN labels(n) AS labels, count(*) AS cnt;
+MATCH ()-[r]->() RETURN type(r) AS rel, count(*) AS cnt;
+```
+
+### Cleanup
+
+```bash
+docker rm -f neo4j-local
 ```
 
 ## Architecture

@@ -1,8 +1,8 @@
-# MCP Memory Server v3.0 (HTTP Transport)
+# MCP Memory Server v4.0 (HTTP Transport)
 
-A persistent memory system for Claude using HTTP-based MCP transport with **semantic event extraction**. Just point Claude to a URL.
+A persistent memory system for Claude using HTTP-based MCP transport with **semantic event extraction** and **V4 graph-backed context expansion**. Just point Claude to a URL.
 
-**Version**: 3.0.0 | **Status**: Production Ready
+**Version**: 4.0.0 | **Status**: Production Ready
 
 ## Quick Start
 
@@ -36,7 +36,7 @@ docker compose up -d
 {
   "mcpServers": {
     "memory": {
-      "url": "http://localhost:3001/mcp/"
+      "url": "http://localhost:3000/mcp/"
     }
   }
 }
@@ -44,7 +44,7 @@ docker compose up -d
 
 **For Claude Desktop / Claude.ai**:
 
-1. Start ngrok: `ngrok http 3001`
+1. Start ngrok: `ngrok http 3000`
 2. Open **Claude Desktop** or **Claude.ai** (web)
 3. Go to **Settings** → **Connectors**
 4. Click **Add Custom Connector**
@@ -104,7 +104,7 @@ Then later:
 | `hybrid_search` | Cross-collection semantic search |
 | `embedding_health` | Check embedding service health |
 
-### V3 Semantic Event Tools (NEW)
+### V3+ Semantic Event Tools
 | Tool | Description |
 |------|-------------|
 | `event_search` | Query events with filters (category, time, artifact) |
@@ -148,10 +148,10 @@ Environment variables:
 
 ```bash
 # Health check
-curl http://localhost:3001/health
+curl http://localhost:3000/health
 
 # MCP endpoint (should return SSE error without proper headers)
-curl http://localhost:3001/mcp/
+curl http://localhost:3000/mcp/
 ```
 
 ## Persistence
@@ -202,7 +202,7 @@ python src/server.py
 ```
 
 ### Tools don't appear in Claude
-1. Check URL has trailing slash: `http://localhost:3001/mcp/`
+1. Check URL has trailing slash: `http://localhost:3000/mcp/`
 2. Restart Claude completely
 3. Check server logs: `python src/server.py` (in foreground)
 
