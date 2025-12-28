@@ -101,15 +101,17 @@ Edit `~/.cursor/mcp.json`:
 }
 ```
 
-### Claude Desktop
+### Claude Desktop / Claude.ai
 
-1. Open Claude Desktop → **Settings** → **Connectors**
-2. Click **Add Custom Connector**
-3. Enter:
+1. Start ngrok: `ngrok http 3001`
+2. Open **Claude Desktop** or **Claude.ai** (web)
+3. Go to **Settings** → **Connectors**
+4. Click **Add Custom Connector**
+5. Enter:
    - **Name**: `memory`
    - **URL**: `https://your-ngrok-url.ngrok-free.app/mcp/`
 
-> **Note**: Claude Desktop requires HTTPS. Use ngrok to expose your local server.
+> **Note**: Claude Desktop and Claude.ai require HTTPS. Use ngrok to expose your local server.
 
 ## MCP Transport Semantics (Read This Before Wiring Clients)
 

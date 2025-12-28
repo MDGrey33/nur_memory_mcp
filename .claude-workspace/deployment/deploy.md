@@ -192,32 +192,24 @@ docker-compose exec mcp-server python healthcheck.py --service all
 
 ### MCP Client Configuration
 
-#### Claude Desktop
+#### Claude Desktop / Claude.ai
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
-
-```json
-{
-  "mcpServers": {
-    "memory": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "http://localhost:3001/mcp/"
-      ]
-    }
-  }
-}
-```
-
-Restart Claude Desktop after configuration.
-
-#### Claude Code CLI
+Claude Desktop and Claude.ai require HTTPS. Use ngrok to expose your local server:
 
 ```bash
-# Add to Claude Code configuration
-claude-code config add-server memory http://localhost:3001/mcp/
+ngrok http 3001
 ```
+
+Then configure via the UI:
+
+1. Open **Claude Desktop** or **Claude.ai** (web)
+2. Go to **Settings** → **Connectors**
+3. Click **Add Custom Connector**
+4. Enter:
+   - **Name**: `memory`
+   - **URL**: `https://your-ngrok-url.ngrok-free.app/mcp/`
+
+> **Important**: Always include the trailing slash in the URL!
 
 #### Cursor IDE
 

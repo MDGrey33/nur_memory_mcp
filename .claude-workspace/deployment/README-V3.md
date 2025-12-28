@@ -23,26 +23,54 @@ docker compose -f docker-compose.v3.yml up -d
 docker compose -f docker-compose.v3.yml exec mcp-server \
   python healthcheck.py --service all
 
-# 5. Configure Claude Desktop
-# Edit ~/Library/Application Support/Claude/claude_desktop_config.json
-# Add MCP server: http://localhost:3001/mcp/
+# 5. Expose via ngrok (required for Claude Desktop/Claude.ai)
+ngrok http 3001
+
+# 6. Configure Claude Desktop or Claude.ai
+# Go to Settings → Connectors → Add Custom Connector
+# Name: memory
+# URL: https://your-ngrok-url.ngrok-free.app/mcp/
 ```
 
 **That's it!** You now have a fully functional V3 deployment with semantic events.
 
 ---
 
-## MCP Client Configuration Semantics (Do This Exactly)
+## MCP Client Configuration
 
-This server speaks MCP over **Streamable HTTP** (implemented as a long-lived **SSE** stream).
+### Cursor IDE (local)
 
-- **Local (Cursor, dev tools)**:
-  - Use: `http://localhost:3001/mcp/`
-  - Keep the trailing slash.
-- **Claude Desktop / Claude Connectors**:
-  - Claude requires **HTTPS**. Use ngrok (or another HTTPS proxy) and configure:
-    - `https://<your-domain>/mcp/`
-  - Keep the trailing slash.
+Edit `~/.cursor/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "url": "http://localhost:3001/mcp/"
+    }
+  }
+}
+```
+
+### Claude Desktop / Claude.ai (requires HTTPS via ngrok)
+
+1. Start ngrok: `ngrok http 3001`
+2. Open **Claude Desktop** or **Claude.ai**
+3. Go to **Settings** → **Connectors**
+4. Click **Add Custom Connector**
+5. Enter:
+   - **Name**: `memory`
+   - **URL**: `https://your-ngrok-url.ngrok-free.app/mcp/`
+
+> **Important**: Always include the trailing slash in the URL!
+
+---
+
+## MCP Transport Semantics
+
+This server speaks MCP over **Streamable HTTP** (long-lived **SSE** stream).
+
+- **Local (Cursor, dev tools)**: Use `http://localhost:3001/mcp/`
+- **Claude Desktop / Claude.ai**: Use ngrok HTTPS URL `https://<domain>/mcp/`
 
 ### `/mcp` vs `/mcp/`
 
