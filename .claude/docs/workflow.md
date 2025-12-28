@@ -146,21 +146,24 @@ This document details the 10-phase autonomous development cycle.
 **Output**: `tests/ui/ui-test-results.json`, screenshots
 **Type**: BLOCKING - Must pass before Phase 8 UAT
 
-**WHY THIS EXISTS**: The user should NEVER be the first to test MCP tools in the browser. API tests can pass while browser interactions fail due to CORS, SSE handling, or UI issues.
+**CRITICAL**: We ALWAYS test with MCP Inspector in the browser before handing off to the user. The user should NEVER be the first to test MCP tools. API tests can pass while browser interactions fail due to CORS, SSE handling, or UI issues.
 
 **QA Lead MUST**:
 1. Start MCP Inspector: `npx @modelcontextprotocol/inspector`
-2. Run browser test: `python .claude-workspace/tests/ui/playwright_mcp_inspector.py --headed`
-3. Verify ALL 17 tools are listed in MCP Inspector UI
-4. Execute at least `embedding_health` tool and verify response shows `status: "healthy"`
-5. Take screenshots as evidence
-6. Save results to `tests/ui/ui-test-results.json`
+2. Open MCP Inspector in browser (not CLI)
+3. Test with LOCAL URL: `http://localhost:3001/mcp/`
+4. Test with NGROK URL: `https://<domain>.ngrok-free.app/mcp/`
+5. Test ALL tools and scenarios in the browser UI
+6. Verify ALL 17 tools are listed and functional
+7. Take screenshots as evidence
 
 **Mandatory Checks**:
 - [ ] MCP Inspector connects successfully (green "Connected" status)
 - [ ] Server shows "MCP Memory v3.0" with correct version
 - [ ] All 17 tools visible in Tools list
-- [ ] `embedding_health` tool returns healthy status
+- [ ] All tools executed and verified in browser
+- [ ] Tests pass on LOCAL (localhost:3001)
+- [ ] Tests pass on NGROK (HTTPS)
 - [ ] No "Failed to fetch" errors in UI
 - [ ] Screenshots captured for evidence
 
