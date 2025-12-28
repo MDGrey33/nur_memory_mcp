@@ -22,9 +22,15 @@ def mock_env_vars(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-api-key-12345")
     monkeypatch.setenv("OPENAI_EMBED_MODEL", "text-embedding-3-large")
     monkeypatch.setenv("OPENAI_EMBED_DIMS", "3072")
+    monkeypatch.setenv("OPENAI_EVENT_MODEL", "gpt-4o-mini")
     monkeypatch.setenv("CHROMA_HOST", "localhost")
     monkeypatch.setenv("CHROMA_PORT", "8001")
     monkeypatch.setenv("MCP_PORT", "3000")
+    monkeypatch.setenv("EVENTS_DB_DSN", "postgresql://events:events@localhost:5432/events")
+    monkeypatch.setenv("POSTGRES_POOL_MIN", "2")
+    monkeypatch.setenv("POSTGRES_POOL_MAX", "10")
+    monkeypatch.setenv("POLL_INTERVAL_MS", "1000")
+    monkeypatch.setenv("EVENT_MAX_ATTEMPTS", "5")
 
 
 # ============================================================================
@@ -42,11 +48,18 @@ def test_config():
         openai_timeout=30,
         openai_max_retries=3,
         openai_batch_size=100,
+        openai_event_model="gpt-4o-mini",
         single_piece_max_tokens=1200,
         chunk_target_tokens=900,
         chunk_overlap_tokens=100,
         chroma_host="localhost",
         chroma_port=8001,
+        events_db_dsn="postgresql://events:events@localhost:5432/events",
+        postgres_pool_min=2,
+        postgres_pool_max=10,
+        worker_id=None,
+        poll_interval_ms=1000,
+        event_max_attempts=5,
         mcp_port=3000,
         log_level="INFO",
         rrf_constant=60

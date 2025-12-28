@@ -176,7 +176,7 @@ def test_delete_artifact_cascade_unchunked(mock_chroma_client):
 
     mock_chunks_collection.get.return_value = {"ids": []}  # No chunks
 
-    def get_collection(name, metadata=None):
+    def get_collection(name, metadata=None, **kwargs):
         if name == "artifacts":
             return mock_artifacts_collection
         elif name == "artifact_chunks":
@@ -206,7 +206,7 @@ def test_delete_artifact_cascade_with_chunks(mock_chroma_client):
         ]
     }
 
-    def get_collection(name, metadata=None):
+    def get_collection(name, metadata=None, **kwargs):
         if name == "artifacts":
             return mock_artifacts_collection
         elif name == "artifact_chunks":
@@ -231,7 +231,7 @@ def test_delete_artifact_cascade_artifact_error(mock_chroma_client):
     mock_chunks_collection = MagicMock()
     mock_chunks_collection.get.return_value = {"ids": []}
 
-    def get_collection(name, metadata=None):
+    def get_collection(name, metadata=None, **kwargs):
         if name == "artifacts":
             return mock_artifacts_collection
         elif name == "artifact_chunks":
@@ -253,7 +253,7 @@ def test_delete_artifact_cascade_chunks_error(mock_chroma_client):
     mock_chunks_collection = MagicMock()
     mock_chunks_collection.get.side_effect = Exception("Query failed")
 
-    def get_collection(name, metadata=None):
+    def get_collection(name, metadata=None, **kwargs):
         if name == "artifacts":
             return mock_artifacts_collection
         elif name == "artifact_chunks":

@@ -1,12 +1,17 @@
 """
 Event extraction service using OpenAI LLM with two-phase extraction:
-- Prompt A: Extract events from each chunk
+- Prompt A: Extract events AND entities from each chunk (V4 extended)
 - Prompt B: Canonicalize and deduplicate events across chunks
+
+V4 additions:
+- entities_mentioned extraction with context clues (role, org, email)
+- Character offsets for entity mentions
+- Aliases within document
 """
 
 import json
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from openai import OpenAI
 
 logger = logging.getLogger("event_extraction")
@@ -24,12 +29,25 @@ EVENT_CATEGORIES = [
     "Stakeholder"
 ]
 
+# Entity types (V4)
+ENTITY_TYPES = [
+    "person",
+    "org",
+    "project",
+    "object",
+    "place",
+    "other"
+]
 
-# Prompt A: Extract events from a single chunk
-PROMPT_A_SYSTEM = """You are an expert at extracting structured semantic events from text artifacts.
 
-Your task is to identify and extract key events from the provided text chunk. Focus on:
+# Prompt A: Extract events AND entities from a single chunk (V4 extended)
+PROMPT_A_SYSTEM = """You are an expert at extracting structured semantic events and entities from text artifacts.
 
+Your task is to identify and extract key events AND entities from the provided text chunk.
+
+## EVENTS
+
+Focus on these event types:
 1. **Commitments**: Promises, deadlines, deliverables (e.g., "Alice will deliver MVP by Q1")
 2. **Executions**: Actions taken, completions (e.g., "Deployed v2.3 to production")
 3. **Decisions**: Choices made, directions set (e.g., "Decided to use Postgres over Kafka")
@@ -47,6 +65,29 @@ For each event, extract:
 - **actors**: Who was involved ([{"ref": "name", "role": "owner|contributor|stakeholder"}])
 - **confidence**: 0.0-1.0 confidence score
 - **evidence**: List of exact quotes from the text (max 25 words each) with character offsets
+
+## ENTITIES (V4)
+
+Also extract all named entities mentioned in the text:
+- **People**: Names of individuals mentioned
+- **Organizations**: Companies, teams, departments
+- **Projects**: Named projects, products, initiatives
+- **Objects**: Specific tools, systems, technologies
+- **Places**: Locations mentioned
+- **Other**: Any other significant named entities
+
+For each entity, extract:
+- **surface_form**: Exact text as it appeared in the document
+- **canonical_suggestion**: Your best guess at the full/formal name
+- **type**: One of [person, org, project, object, place, other]
+- **context_clues**: Any disambiguating information found:
+  - **role**: Job title or role if mentioned (e.g., "Engineering Manager")
+  - **org**: Organization affiliation if mentioned (e.g., "Acme Corp")
+  - **email**: Email address if mentioned
+- **aliases_in_doc**: Other ways this entity is referred to in this chunk (e.g., ["Alice", "A.C."])
+- **confidence**: 0.0-1.0
+- **start_char**: Starting character offset in this chunk
+- **end_char**: Ending character offset in this chunk
 
 Return JSON with this structure:
 {
@@ -66,12 +107,28 @@ Return JSON with this structure:
         }
       ]
     }
+  ],
+  "entities_mentioned": [
+    {
+      "surface_form": "Alice Chen",
+      "canonical_suggestion": "Alice Chen",
+      "type": "person",
+      "context_clues": {
+        "role": "Engineering Manager",
+        "org": "Acme Corp",
+        "email": "achen@acme.com"
+      },
+      "aliases_in_doc": ["Alice", "A. Chen"],
+      "confidence": 0.95,
+      "start_char": 150,
+      "end_char": 160
+    }
   ]
 }
 """
 
 
-PROMPT_A_USER_TEMPLATE = """Extract semantic events from the following text chunk:
+PROMPT_A_USER_TEMPLATE = """Extract semantic events AND named entities from the following text chunk:
 
 Chunk Index: {chunk_index}
 Chunk ID: {chunk_id}
@@ -145,7 +202,7 @@ class EventExtractionService:
         start_char: int
     ) -> List[Dict[str, Any]]:
         """
-        Extract events from a single chunk using Prompt A.
+        Extract events from a single chunk using Prompt A (V3 compatible).
 
         Args:
             chunk_text: Text content of the chunk
@@ -155,6 +212,28 @@ class EventExtractionService:
 
         Returns:
             List of extracted events
+        """
+        events, _ = self.extract_from_chunk_v4(chunk_text, chunk_index, chunk_id, start_char)
+        return events
+
+    def extract_from_chunk_v4(
+        self,
+        chunk_text: str,
+        chunk_index: int,
+        chunk_id: str,
+        start_char: int
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """
+        Extract events AND entities from a single chunk using Prompt A (V4 extended).
+
+        Args:
+            chunk_text: Text content of the chunk
+            chunk_index: Index of this chunk
+            chunk_id: Chunk ID (for evidence tracking)
+            start_char: Starting character offset in original artifact
+
+        Returns:
+            Tuple of (events, entities_mentioned)
         """
         user_prompt = PROMPT_A_USER_TEMPLATE.format(
             chunk_index=chunk_index,
@@ -179,6 +258,7 @@ class EventExtractionService:
             result = json.loads(content)
 
             events = result.get("events", [])
+            entities = result.get("entities_mentioned", [])
 
             # Adjust character offsets to be relative to full artifact
             for event in events:
@@ -188,15 +268,23 @@ class EventExtractionService:
                         ev["end_char"] += start_char
                         ev["chunk_id"] = chunk_id
 
-            logger.info(f"Extracted {len(events)} events from chunk {chunk_index}")
-            return events
+            # Adjust entity character offsets
+            for entity in entities:
+                if entity.get("start_char") is not None:
+                    entity["start_char"] += start_char
+                if entity.get("end_char") is not None:
+                    entity["end_char"] += start_char
+                entity["chunk_id"] = chunk_id
+
+            logger.info(f"Extracted {len(events)} events and {len(entities)} entities from chunk {chunk_index}")
+            return events, entities
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON from Prompt A: {e}")
             logger.error(f"Raw response: {content}")
-            return []
+            return [], []
         except Exception as e:
-            logger.error(f"Error in extract_from_chunk: {e}")
+            logger.error(f"Error in extract_from_chunk_v4: {e}")
             raise
 
     def canonicalize_events(
@@ -315,3 +403,127 @@ class EventExtractionService:
                 return False
 
         return True
+
+    def validate_entity(self, entity: Dict[str, Any]) -> bool:
+        """
+        Validate extracted entity structure (V4).
+
+        Args:
+            entity: Entity dict to validate
+
+        Returns:
+            True if valid, False otherwise
+        """
+        required_fields = ["surface_form", "type"]
+
+        for field in required_fields:
+            if field not in entity:
+                logger.warning(f"Entity missing required field: {field}")
+                return False
+
+        # Validate entity type
+        entity_type = entity.get("type", "other")
+        if entity_type not in ENTITY_TYPES:
+            logger.warning(f"Invalid entity type: {entity_type}, defaulting to 'other'")
+            entity["type"] = "other"
+
+        # Validate confidence if present
+        if "confidence" in entity:
+            try:
+                conf = float(entity["confidence"])
+                if not (0.0 <= conf <= 1.0):
+                    entity["confidence"] = 0.9
+            except (ValueError, TypeError):
+                entity["confidence"] = 0.9
+
+        # Ensure canonical_suggestion exists
+        if not entity.get("canonical_suggestion"):
+            entity["canonical_suggestion"] = entity["surface_form"]
+
+        # Validate context_clues structure
+        context = entity.get("context_clues", {})
+        if not isinstance(context, dict):
+            entity["context_clues"] = {}
+
+        return True
+
+    def deduplicate_entities(
+        self,
+        chunk_entities: List[List[Dict[str, Any]]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Deduplicate entities across chunks (V4).
+
+        Entities are considered duplicates if they have the same
+        normalized canonical_suggestion and type.
+
+        Args:
+            chunk_entities: List of entity lists (one per chunk)
+
+        Returns:
+            Deduplicated list of entities with merged aliases
+        """
+        # Build a map of canonical_key -> merged entity
+        entity_map: Dict[str, Dict[str, Any]] = {}
+
+        for entities in chunk_entities:
+            for entity in entities:
+                if not self.validate_entity(entity):
+                    continue
+
+                # Create canonical key from normalized name + type
+                canonical = entity.get("canonical_suggestion", entity["surface_form"])
+                entity_type = entity.get("type", "other")
+                key = f"{canonical.lower().strip()}:{entity_type}"
+
+                if key not in entity_map:
+                    # First occurrence - use as base
+                    entity_map[key] = {
+                        "surface_form": entity["surface_form"],
+                        "canonical_suggestion": canonical,
+                        "type": entity_type,
+                        "context_clues": entity.get("context_clues", {}),
+                        "aliases_in_doc": list(entity.get("aliases_in_doc", [])),
+                        "confidence": entity.get("confidence", 0.9),
+                        "start_char": entity.get("start_char"),
+                        "end_char": entity.get("end_char"),
+                        "mentions": [entity]  # Track all mentions
+                    }
+                else:
+                    # Merge with existing
+                    existing = entity_map[key]
+
+                    # Merge aliases
+                    new_aliases = entity.get("aliases_in_doc", [])
+                    for alias in new_aliases:
+                        if alias not in existing["aliases_in_doc"]:
+                            existing["aliases_in_doc"].append(alias)
+
+                    # Add surface form as alias if different
+                    if entity["surface_form"] != existing["surface_form"]:
+                        if entity["surface_form"] not in existing["aliases_in_doc"]:
+                            existing["aliases_in_doc"].append(entity["surface_form"])
+
+                    # Merge context clues (keep non-null values)
+                    new_context = entity.get("context_clues", {})
+                    for ctx_key in ["role", "org", "organization", "email"]:
+                        if new_context.get(ctx_key) and not existing["context_clues"].get(ctx_key):
+                            existing["context_clues"][ctx_key] = new_context[ctx_key]
+
+                    # Keep highest confidence
+                    new_conf = entity.get("confidence", 0.9)
+                    if new_conf > existing["confidence"]:
+                        existing["confidence"] = new_conf
+
+                    # Track mention
+                    existing["mentions"].append(entity)
+
+        # Return deduplicated list
+        result = []
+        for entity in entity_map.values():
+            # Remove internal mentions tracking
+            entity.pop("mentions", None)
+            result.append(entity)
+
+        logger.info(f"Deduplicated entities: {sum(len(e) for e in chunk_entities)} -> {len(result)}")
+        return result

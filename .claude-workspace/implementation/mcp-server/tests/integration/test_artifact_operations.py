@@ -12,7 +12,7 @@ def mock_artifact_services():
         mock_artifacts_collection = MagicMock()
         mock_chunks_collection = MagicMock()
 
-        def get_collection(name, metadata=None):
+        def get_collection(name, metadata=None, **kwargs):
             if name == "artifacts":
                 return mock_artifacts_collection
             elif name == "artifact_chunks":

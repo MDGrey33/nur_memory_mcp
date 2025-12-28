@@ -19,7 +19,7 @@ Configuration via .env file (see .env.example)
 import os
 import logging
 import hashlib
-from datetime import datetime
+from datetime import datetime, date
 from uuid import uuid4
 from contextlib import asynccontextmanager
 from typing import Optional, List
@@ -67,8 +67,74 @@ from storage.postgres_client import PostgresClient
 from services.job_queue_service import JobQueueService
 from tools.event_tools import event_search, event_get, event_list_for_revision
 
+# V4: Graph service import
+from services.graph_service import GraphService
+
 # Setup logging
 logger = logging.getLogger("mcp-memory")
+
+# ============================================================================
+# V4: hybrid_search expand_options (static capability metadata)
+# ============================================================================
+
+HYBRID_SEARCH_EXPAND_OPTIONS = [
+    {
+        "name": "include_memory",
+        "type": "boolean",
+        "default": False,
+        "description": "Also search durable memories (preferences/facts) and include them in results.",
+        "effect": "Adds Chroma 'memories' collection to the search and merges with RRF.",
+    },
+    {
+        "name": "expand_neighbors",
+        "type": "boolean",
+        "default": False,
+        "description": "For chunk hits, include ±1 adjacent chunks to provide more surrounding context.",
+        "effect": "Returns combined chunk text separated by [CHUNK BOUNDARY] markers.",
+    },
+    {
+        "name": "include_events",
+        "type": "boolean",
+        "default": True,
+        "description": "Include semantic events from PostgreSQL in the merged results.",
+        "effect": "Adds Postgres event search (FTS) results to the output.",
+    },
+    {
+        "name": "graph_expand",
+        "type": "boolean",
+        "default": True,
+        "description": "Add a related context pack (1 hop) using the graph to surface connected events and entities.",
+        "effect": "Populates related_context[] and entities[].",
+    },
+    {
+        "name": "graph_filters",
+        "type": "string[]",
+        "default": ["Decision", "Commitment", "QualityRisk"],
+        "description": "Limit graph-expanded events to these categories.",
+        "constraints": "Only valid when graph_expand=true.",
+    },
+    {
+        "name": "graph_budget",
+        "type": "integer",
+        "default": 10,
+        "description": "Maximum number of related context items to add.",
+        "constraints": "Valid range: 0–50. Only used when graph_expand=true.",
+    },
+    {
+        "name": "include_entities",
+        "type": "boolean",
+        "default": True,
+        "description": "Include canonical entities involved in primary + related results.",
+        "constraints": "Only meaningful when graph_expand=true.",
+    },
+    {
+        "name": "include_revision_diff",
+        "type": "boolean",
+        "default": False,
+        "description": "If the top hit maps to an artifact revision, include a compact diff vs the previous revision.",
+        "constraints": "Optional feature; only used when graph_expand=true and a previous revision exists.",
+    },
+]
 
 # Create FastMCP server
 mcp = FastMCP("MCP Memory v3.0")
@@ -84,6 +150,9 @@ chroma_manager: Optional[ChromaClientManager] = None
 # V3: Postgres and job queue
 pg_client: Optional[PostgresClient] = None
 job_queue_service: Optional[JobQueueService] = None
+
+# V4: Graph service
+graph_service: Optional[GraphService] = None
 
 
 # ============================================================================
@@ -411,6 +480,16 @@ def history_get(
 # NEW TOOLS (v2)
 # ============================================================================
 
+def parse_date_string(date_str: Optional[str]) -> Optional[date]:
+    """Convert a date string (YYYY-MM-DD) to a Python date object for Postgres."""
+    if not date_str:
+        return None
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
 @mcp.tool()
 async def artifact_ingest(
     artifact_type: str,
@@ -505,13 +584,109 @@ async def artifact_ingest(
             existing_hash = existing.get("metadata", {}).get("content_hash")
             if existing_hash == content_hash:
                 # No changes - return existing
-                logger.info(f"Artifact {artifact_id} unchanged, skipping ingestion")
+                #
+                # V3/V4 BACKFILL:
+                # If this artifact was ingested before Postgres was configured, it can exist in Chroma
+                # without an artifact_revision row. That prevents event extraction, event_search, and
+                # graph expansion from working for this artifact.
+                #
+                # Re-ingesting an unchanged artifact should backfill Postgres metadata and enqueue
+                # extraction if missing (idempotent).
+                logger.info(f"Artifact {artifact_id} unchanged, skipping Chroma ingestion")
+
+                artifact_uid = "uid_" + hashlib.sha256(
+                    f"{source_system}:{source_id}".encode()
+                ).hexdigest()[:16] if source_id else "uid_" + uuid4().hex[:16]
+                revision_id = "rev_" + content_hash[:16]
+
+                job_id = None
+                job_status = None
+
+                if pg_client and job_queue_service:
+                    try:
+                        existing_meta = existing.get("metadata", {}) or {}
+
+                        def _norm_enum(value: Optional[str]) -> Optional[str]:
+                            """Normalize empty strings to None for Postgres CHECK-constrained columns."""
+                            if value is None:
+                                return None
+                            v = str(value).strip()
+                            return v if v else None
+
+                        # Prefer metadata persisted in Chroma for backfill correctness
+                        is_chunked = bool(existing_meta.get("is_chunked", False))
+                        chunk_count = int(existing_meta.get("num_chunks", 0) or 0)
+                        token_count = int(existing_meta.get("token_count", 0) or chunking_service.count_tokens(content))
+                        title_val = title if title is not None else existing_meta.get("title", "") or ""
+
+                        # Check whether revision exists in Postgres
+                        rev_row = None
+                        try:
+                            rev_row = await pg_client.fetch_one(
+                                """
+                                SELECT 1
+                                FROM artifact_revision
+                                WHERE artifact_uid = $1 AND revision_id = $2
+                                LIMIT 1
+                                """,
+                                artifact_uid,
+                                revision_id
+                            )
+                        except Exception:
+                            rev_row = None
+
+                        if not rev_row:
+                            await pg_client.transaction([
+                                (
+                                    "UPDATE artifact_revision SET is_latest = false WHERE artifact_uid = $1 AND is_latest = true",
+                                    (artifact_uid,)
+                                ),
+                                (
+                                    """INSERT INTO artifact_revision
+                                       (artifact_uid, revision_id, artifact_id, artifact_type, source_system, source_id, content_hash, token_count, is_chunked, chunk_count, title,
+                                        document_date, source_type, document_status, author_title, distribution_scope)
+                                       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                                       ON CONFLICT (artifact_uid, revision_id) DO NOTHING""",
+                                    (
+                                        artifact_uid,
+                                        revision_id,
+                                        artifact_id,
+                                        artifact_type,
+                                        source_system,
+                                        source_id or "",
+                                        content_hash,
+                                        token_count,
+                                        is_chunked,
+                                        chunk_count,
+                                        title_val,
+                                        parse_date_string(document_date or existing_meta.get("document_date") or ""),
+                                        _norm_enum(source_type or existing_meta.get("source_type")),
+                                        _norm_enum(document_status or existing_meta.get("document_status")),
+                                        author_title or existing_meta.get("author_title") or "",
+                                        _norm_enum(distribution_scope or existing_meta.get("distribution_scope")),
+                                    )
+                                )
+                            ])
+
+                        # Enqueue extraction (idempotent)
+                        job_uuid = await job_queue_service.enqueue_job(artifact_uid, revision_id)
+                        if job_uuid:
+                            job_id = str(job_uuid)
+                            job_status = "PENDING"
+
+                    except Exception as e:
+                        logger.warning(f"V3 backfill failed for unchanged artifact {artifact_id}: {e}")
+
                 return {
                     "artifact_id": artifact_id,
+                    "artifact_uid": artifact_uid,
+                    "revision_id": revision_id,
                     "is_chunked": existing.get("metadata", {}).get("is_chunked", False),
                     "num_chunks": existing.get("metadata", {}).get("num_chunks", 0),
                     "stored_ids": [artifact_id],
-                    "status": "unchanged"
+                    "status": "unchanged",
+                    "job_id": job_id,
+                    "job_status": job_status
                 }
             else:
                 # Content changed - delete old version
@@ -592,12 +767,12 @@ async def artifact_ingest(
                         # Insert new revision (include artifact_id for worker to fetch from ChromaDB)
                         (
                             """INSERT INTO artifact_revision
-                               (artifact_uid, revision_id, artifact_id, content_hash, token_count, is_chunked, chunk_count, is_latest, source_system, source_id, title,
+                               (artifact_uid, revision_id, artifact_id, artifact_type, source_system, source_id, content_hash, token_count, is_chunked, chunk_count, title,
                                 document_date, source_type, document_status, author_title, distribution_scope)
-                               VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10, $11, $12, $13, $14, $15)
+                               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
                                ON CONFLICT (artifact_uid, revision_id) DO NOTHING""",
-                            (artifact_uid, revision_id, artifact_id, content_hash, token_count, False, 0, source_system, source_id or "", title or "",
-                             document_date, source_type, document_status, author_title, distribution_scope)
+                            (artifact_uid, revision_id, artifact_id, artifact_type, source_system, source_id or "", content_hash, token_count, False, 0, title or "",
+                             parse_date_string(document_date), source_type, document_status, author_title, distribution_scope)
                         )
                     ])
 
@@ -703,12 +878,12 @@ async def artifact_ingest(
                         # Insert new revision
                         (
                             """INSERT INTO artifact_revision
-                               (artifact_uid, revision_id, artifact_id, content_hash, token_count, is_chunked, chunk_count, is_latest, source_system, source_id, title,
+                               (artifact_uid, revision_id, artifact_id, artifact_type, source_system, source_id, content_hash, token_count, is_chunked, chunk_count, title,
                                 document_date, source_type, document_status, author_title, distribution_scope)
-                               VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10, $11, $12, $13, $14, $15)
+                               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
                                ON CONFLICT (artifact_uid, revision_id) DO NOTHING""",
-                            (artifact_uid, revision_id, artifact_id, content_hash, token_count, True, len(chunks), source_system, source_id or "", title or "",
-                             document_date, source_type, document_status, author_title, distribution_scope)
+                            (artifact_uid, revision_id, artifact_id, artifact_type, source_system, source_id or "", content_hash, token_count, True, len(chunks), title or "",
+                             parse_date_string(document_date), source_type, document_status, author_title, distribution_scope)
                         )
                     ])
 
@@ -948,14 +1123,29 @@ async def hybrid_search(
     limit: int = 5,
     include_memory: bool = False,
     include_events: bool = True,
-    expand_neighbors: bool = False
-) -> str:
+    expand_neighbors: bool = False,
+    # V4 graph expansion parameters
+    graph_expand: bool = True,
+    graph_budget: int = 10,
+    # Default tuned for quality: anchor expansion on the top hit to avoid pulling unrelated context
+    graph_seed_limit: int = 1,
+    graph_depth: int = 1,
+    # Default matches V4 brief; pass null to opt out (i.e., all categories).
+    graph_filters: Optional[List[str]] = ["Decision", "Commitment", "QualityRisk"],
+    include_entities: bool = True,
+    # Optional feature flag (V4 brief): currently treated as no-op if enabled
+    include_revision_diff: bool = False
+) -> dict:
     """
     PRIMARY SEARCH - Start here for context discovery.
 
     Searches across artifacts AND semantic events with source metadata for
     credibility reasoning. Returns document content plus extracted events
     (commitments, decisions, risks, etc.) with evidence quotes.
+
+    V4 ENHANCEMENT: Set graph_expand=true to discover related events through
+    shared actors/subjects across documents. This enables "portable memory" -
+    finding context you didn't explicitly search for but is connected.
 
     Use this first for broad discovery, then use specialized tools to drill down:
     - event_search: For structured filters (category, time range, specific artifact)
@@ -968,6 +1158,12 @@ async def hybrid_search(
         include_memory: Also search stored memories
         include_events: Include semantic events with source context (recommended)
         expand_neighbors: Include ±1 chunks for more context
+        graph_expand: V4 - Enable graph-based context expansion (finds related events via shared actors/subjects)
+        graph_budget: V4 - Max additional related items from graph expansion (1-50, default 10)
+        graph_seed_limit: V4 - How many primary results to use as expansion seeds (1-20, default 5)
+        graph_depth: V4 - Graph traversal depth (currently only 1 supported)
+        graph_filters: V4 - Category filters for graph expansion (null = all categories)
+        include_entities: V4 - Include entity information in response when graph_expand=true
     """
     try:
         if not query or len(query) > 500:
@@ -976,21 +1172,29 @@ async def hybrid_search(
         if limit < 1 or limit > 50:
             return "Error: Limit must be between 1 and 50"
 
-        # Use retrieval service for ChromaDB collections
-        results = retrieval_service.hybrid_search(
-            query=query,
-            limit=limit,
-            include_memory=include_memory,
-            expand_neighbors=expand_neighbors
-        )
+        # V4 validation (only applies when graph_expand=true).
+        # Keep expand_options static and returned on every call (see HYBRID_SEARCH_EXPAND_OPTIONS).
+        if graph_expand:
+            if graph_budget < 0 or graph_budget > 50:
+                return "Error: graph_budget must be between 0 and 50"
+            if graph_seed_limit < 1 or graph_seed_limit > 20:
+                return "Error: graph_seed_limit must be between 1 and 20"
+            if graph_depth != 1:
+                return "Error: graph_depth currently only supports 1"
 
-        # Determine collections searched
-        collections_searched = ["artifacts", "artifact_chunks"]
-        if include_memory:
-            collections_searched.append("memory")
+            if graph_filters is not None:
+                if not isinstance(graph_filters, list) or any(not isinstance(x, str) for x in graph_filters):
+                    return "Error: graph_filters must be null or a list[str]"
+                # Validate categories match the canonical event category set
+                from tools.event_tools import EVENT_CATEGORIES
+                invalid = [c for c in graph_filters if c not in EVENT_CATEGORIES]
+                if invalid:
+                    return f"Error: graph_filters contains invalid categories: {', '.join(invalid)}"
 
-        # V3: Also search semantic events in Postgres
-        event_results = []
+        # V3: Search semantic events in Postgres (used both for primary_results and
+        # as preferred graph expansion seeds when available).
+        event_results: List[dict] = []
+        seed_event_ids = []
         if include_events and pg_client:
             try:
                 from tools.event_tools import event_search
@@ -1002,100 +1206,105 @@ async def hybrid_search(
                 )
                 if "events" in event_response:
                     event_results = event_response["events"]
-                    collections_searched.append("events")
+                    # Convert to UUIDs for graph expansion seeds (higher precision than vector->revision mapping),
+                    # but choose seeds by lexical relevance to the query to avoid off-topic expansions when the
+                    # event search uses OR fallback (e.g., "risk" matches many events).
+                    from uuid import UUID
+                    import re
+
+                    def _anchor_tokens(q: str) -> List[str]:
+                        toks = re.findall(r"[a-z0-9]+", (q or "").lower())
+                        stop = {
+                            "the","a","an","and","or","of","to","in","on","for","by","with","at","from",
+                            "is","are","was","were","be","been","it","this","that","as"
+                        }
+                        out = []
+                        for t in toks:
+                            if t in stop:
+                                continue
+                            if t.isdigit() or len(t) >= 4:
+                                out.append(t)
+                        # unique in order
+                        seen=set(); uniq=[]
+                        for t in out:
+                            if t not in seen:
+                                uniq.append(t); seen.add(t)
+                        return uniq
+
+                    anchors = _anchor_tokens(query)
+                    min_overlap = 2 if len(anchors) >= 5 else 1
+
+                    scored = []
+                    for ev in event_results:
+                        narr = (ev.get("narrative") or "")
+                        text = narr.lower()
+                        overlap = sum(1 for t in anchors if t in text)
+                        conf = float(ev.get("confidence") or 0.0)
+                        scored.append((overlap, conf, ev))
+
+                    scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+                    for overlap, _conf, ev in scored:
+                        if overlap < min_overlap:
+                            continue
+                        eid = ev.get("event_id")
+                        if not eid:
+                            continue
+                        try:
+                            seed_event_ids.append(UUID(str(eid).replace("evt_", "")))
+                        except Exception:
+                            continue
             except Exception as e:
                 logger.warning(f"Event search failed: {e}")
 
-        if not results and not event_results:
-            return "No results found."
+        # V4: Use hybrid_search_v4 for graph expansion support.
+        # If include_events=true and event search found matches, we seed graph expansion
+        # from those event IDs to keep related_context anchored to the query.
+        v4_result = await retrieval_service.hybrid_search_v4(
+            query=query,
+            limit=limit,
+            include_memory=include_memory,
+            expand_neighbors=expand_neighbors,
+            graph_expand=graph_expand,
+            graph_depth=graph_depth,
+            graph_budget=graph_budget,
+            graph_seed_limit=graph_seed_limit,
+            graph_filters={"categories": graph_filters} if graph_filters is not None else None,
+            include_entities=include_entities,
+            seed_event_ids=seed_event_ids if seed_event_ids else None,
+        )
 
-        # Format output
-        total_results = len(results) + len(event_results)
-        output = [f"Found {total_results} results (searched: {', '.join(collections_searched)}):\n"]
+        # Build stable JSON output per v4.md
+        v4_dict = v4_result.to_dict()
+        primary_results = v4_dict.get("primary_results", [])
 
-        result_num = 1
+        # Append event search results as additional primary_results (keeps current behavior of
+        # searching both vector DB and event store, while returning a single structured payload).
+        for ev in event_results:
+            primary_results.append({
+                "type": "event",
+                "id": ev.get("event_id"),
+                "category": ev.get("category"),
+                "narrative": ev.get("narrative"),
+                "event_time": ev.get("event_time"),
+                "confidence": ev.get("confidence"),
+                "source": ev.get("source"),
+                "evidence": ev.get("evidence", [])
+            })
 
-        # Output ChromaDB results
-        for merged_result in results:
-            result = merged_result.result
-            metadata = result.metadata
+        # Behavior requirement: expand_options is static capability metadata and must not depend on results.
+        # Return it on every call so the assistant can offer follow-up expansions.
+        expand_options = HYBRID_SEARCH_EXPAND_OPTIONS
 
-            result_type = "chunk" if result.is_chunk else "artifact"
-            if result.collection == "memory":
-                result_type = "memory"
-
-            output.append(f"[{result_num}] RRF score: {merged_result.rrf_score:.3f} (from: {', '.join(merged_result.collections)})")
-            output.append(f"    Type: {result_type} | ID: {result.id}")
-
-            if result.collection in ["artifacts", "artifact_chunks"]:
-                title = metadata.get("title", "Untitled")
-                source = metadata.get("source_system", "unknown")
-                sensitivity = metadata.get("sensitivity", "normal")
-                doc_date = metadata.get("document_date", "")
-                doc_status = metadata.get("document_status", "")
-
-                output.append(f"    Title: {title}")
-                output.append(f"    Source: {source} | Sensitivity: {sensitivity}")
-                if doc_date:
-                    output.append(f"    Document Date: {doc_date}")
-                if doc_status:
-                    output.append(f"    Status: {doc_status}")
-
-            # Snippet
-            snippet = result.content[:200].replace("\n", " ")
-            if len(result.content) > 200:
-                snippet += "..."
-            output.append(f"    Snippet: {snippet}")
-
-            # Evidence URL
-            source_url = metadata.get("source_url")
-            if source_url:
-                output.append(f"    Evidence: {source_url}")
-
-            output.append("")  # Blank line
-            result_num += 1
-
-        # Output Event results (V3)
-        for event in event_results:
-            output.append(f"[{result_num}] Event: {event['category']} (confidence: {event['confidence']:.0%})")
-            output.append(f"    Type: event | ID: {event['event_id']}")
-            output.append(f"    Narrative: {event['narrative']}")
-
-            # Event time
-            if event.get("event_time"):
-                output.append(f"    Event Time: {event['event_time']}")
-
-            # Source context for authority reasoning
-            source = event.get("source", {})
-            if source.get("title"):
-                output.append(f"    Source: {source.get('title')}")
-            if source.get("document_date"):
-                output.append(f"    Document Date: {source.get('document_date')}")
-            if source.get("source_type"):
-                output.append(f"    Source Type: {source.get('source_type')}")
-            if source.get("document_status"):
-                output.append(f"    Status: {source.get('document_status')}")
-            if source.get("author_title"):
-                output.append(f"    Author: {source.get('author_title')}")
-            if source.get("distribution_scope"):
-                output.append(f"    Distribution: {source.get('distribution_scope')}")
-
-            # Evidence quote
-            evidence = event.get("evidence", [])
-            if evidence:
-                quote = evidence[0].get("quote", "")[:100]
-                if len(evidence[0].get("quote", "")) > 100:
-                    quote += "..."
-                output.append(f"    Evidence: \"{quote}\"")
-
-            output.append("")  # Blank line
-            result_num += 1
-
-        return "\n".join(output)
+        return {
+            "primary_results": primary_results,
+            "related_context": v4_dict.get("related_context", []) if graph_expand else [],
+            "entities": (v4_dict.get("entities", []) if include_entities else []) if graph_expand else [],
+            "expand_options": expand_options,
+        }
 
     except Exception as e:
         logger.error(f"hybrid_search error: {e}", exc_info=True)
-        return f"Search failed: {str(e)}"
+        return {"error": f"Search failed: {str(e)}"}
 
 
 @mcp.tool()
@@ -1339,6 +1548,7 @@ async def lifespan(app):
     global config, embedding_service, chunking_service, retrieval_service
     global privacy_service, chroma_manager, session_manager
     global pg_client, job_queue_service  # V3
+    global graph_service  # V4
 
     logger.info("=" * 60)
     logger.info("Starting MCP Memory Server v3.0")
@@ -1395,23 +1605,13 @@ async def lifespan(app):
         )
         logger.info("  ChunkingService: OK")
 
-        # Initialize retrieval service
-        logger.info("Initializing RetrievalService...")
-        retrieval_service = RetrievalService(
-            embedding_service=embedding_service,
-            chunking_service=chunking_service,
-            chroma_client=chroma_manager.get_client(),
-            k=config.rrf_constant
-        )
-        logger.info("  RetrievalService: OK")
-
         # Initialize privacy service (placeholder)
         logger.info("Initializing PrivacyFilterService...")
         privacy_service = PrivacyFilterService()
         logger.info("  PrivacyFilterService: OK (v2 placeholder)")
 
         # V3: Initialize Postgres client
-        logger.info("Initializing PostgreSQL (V3)...")
+        logger.info("Initializing PostgreSQL (V3/V4)...")
         try:
             pg_client = PostgresClient(
                 dsn=config.events_db_dsn,
@@ -1430,10 +1630,32 @@ async def lifespan(app):
             job_queue_service = JobQueueService(pg_client, config.event_max_attempts)
             logger.info(f"  JobQueueService: OK (max attempts={config.event_max_attempts})")
 
+            # V4: Initialize graph service for AGE-based context expansion
+            graph_service = GraphService(pg_client, graph_name="nur")
+            graph_health = await graph_service.health_check()
+            if graph_health.age_enabled and graph_health.graph_exists:
+                logger.info(f"  GraphService: OK (graph=nur, entities={graph_health.entity_node_count}, events={graph_health.event_node_count})")
+            else:
+                logger.warning(f"  GraphService: AGE not available or graph not found - V4 graph expansion disabled")
+                graph_service = None
+
         except Exception as e:
-            logger.warning(f"  PostgreSQL: UNAVAILABLE ({e}) - V3 features disabled")
+            logger.warning(f"  PostgreSQL: UNAVAILABLE ({e}) - V3/V4 features disabled")
             pg_client = None
             job_queue_service = None
+            graph_service = None
+
+        # Initialize retrieval service (with V4 graph support if available)
+        logger.info("Initializing RetrievalService...")
+        retrieval_service = RetrievalService(
+            embedding_service=embedding_service,
+            chunking_service=chunking_service,
+            chroma_client=chroma_manager.get_client(),
+            k=config.rrf_constant,
+            pg_client=pg_client,
+            graph_service=graph_service
+        )
+        logger.info(f"  RetrievalService: OK (V4 graph_expand={'enabled' if graph_service else 'disabled'})")
 
         # Create session manager
         session_manager = StreamableHTTPSessionManager(

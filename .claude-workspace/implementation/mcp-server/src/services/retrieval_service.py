@@ -1,7 +1,22 @@
-"""RRF-based hybrid retrieval service."""
+"""
+RRF-based hybrid retrieval service.
+
+V3 features:
+- Multi-collection search (artifacts, chunks, memory)
+- RRF merging for rank fusion
+- Neighbor expansion for chunk context
+
+V4 features (added):
+- Graph expansion for related context
+- Entity resolution and linking
+- New output shape with related_context and entities
+"""
 
 import logging
-from typing import List, Dict, Optional
+import os
+from typing import List, Dict, Optional, Any, Tuple
+from dataclasses import dataclass, field
+from uuid import UUID
 
 from chromadb import HttpClient
 
@@ -19,16 +34,116 @@ from utils.errors import RetrievalError
 
 logger = logging.getLogger("mcp-memory.retrieval")
 
+# Default distance cutoff for Chroma results (smaller is more similar).
+# Set RETRIEVAL_MAX_DISTANCE to tune; if unset, we use a conservative default to
+# reduce noisy / irrelevant chunk hits.
+DEFAULT_MAX_DISTANCE = float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.35"))
+# For chunk hits, require a minimum number of query "anchor tokens" to appear in
+# the chunk content (reduces generic matches like "code quality" when querying for
+# specific incidents). Set to 0 to disable.
+CHUNK_MIN_ANCHOR_MATCHES = int(os.getenv("RETRIEVAL_CHUNK_MIN_ANCHOR_MATCHES", "1"))
+
+
+# ============================================================================
+# V4 Data Structures
+# ============================================================================
+
+@dataclass
+class RelatedContextItem:
+    """A related context item from graph expansion."""
+    type: str  # "event" | "artifact"
+    id: str
+    category: Optional[str] = None
+    reason: str = ""  # e.g., "same_actor:Alice Chen"
+    summary: str = ""
+    artifact_uid: Optional[str] = None
+    revision_id: Optional[str] = None
+    event_time: Optional[str] = None
+    evidence: List[Dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "type": self.type,
+            "id": self.id,
+            "category": self.category,
+            "reason": self.reason,
+            "summary": self.summary,
+            "evidence": self.evidence,
+            "artifact_uid": self.artifact_uid,
+            "revision_id": self.revision_id,
+            "event_time": self.event_time
+        }
+
+
+@dataclass
+class EntityInfo:
+    """Entity information for V4 responses."""
+    entity_id: str
+    name: str
+    type: str
+    role: Optional[str] = None
+    organization: Optional[str] = None
+    mention_count: int = 1
+    aliases: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "entity_id": self.entity_id,
+            "name": self.name,
+            "type": self.type,
+            "role": self.role,
+            "organization": self.organization,
+            "aliases": self.aliases,
+            "mention_count": self.mention_count
+        }
+
+
+@dataclass
+class V4SearchResult:
+    """V4 search result with graph expansion."""
+    primary_results: List[MergedResult]
+    related_context: List[RelatedContextItem] = field(default_factory=list)
+    entities: List[EntityInfo] = field(default_factory=list)
+    expand_options: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "primary_results": [
+                {
+                    "id": r.result.id,
+                    "content": r.result.content,
+                    "metadata": r.result.metadata,
+                    "collection": r.result.collection,
+                    "rrf_score": r.rrf_score,
+                    "artifact_uid": self._get_artifact_uid(r)
+                }
+                for r in self.primary_results
+            ],
+            "related_context": [rc.to_dict() for rc in self.related_context],
+            "entities": [e.to_dict() for e in self.entities],
+            "expand_options": self.expand_options
+        }
+
+    def _get_artifact_uid(self, result: MergedResult) -> Optional[str]:
+        """Extract artifact_uid from result metadata or revision lookup."""
+        # Try metadata first
+        if result.result.metadata.get("artifact_uid"):
+            return result.result.metadata["artifact_uid"]
+        # Fallback to artifact_id
+        return result.result.artifact_id
+
 
 class RetrievalService:
-    """RRF merging and hybrid retrieval service."""
+    """RRF merging and hybrid retrieval service with V4 graph expansion."""
 
     def __init__(
         self,
         embedding_service: EmbeddingService,
         chunking_service: ChunkingService,
         chroma_client: HttpClient,
-        k: int = 60
+        k: int = 60,
+        pg_client=None,
+        graph_service=None
     ):
         """
         Initialize retrieval service.
@@ -38,11 +153,17 @@ class RetrievalService:
             chunking_service: Chunking service for neighbor expansion
             chroma_client: ChromaDB client
             k: RRF constant (standard value: 60)
+            pg_client: Postgres client for V4 features (optional)
+            graph_service: GraphService for V4 graph expansion (optional)
         """
         self.embedding_service = embedding_service
         self.chunking_service = chunking_service
         self.chroma_client = chroma_client
         self.k = k
+
+        # V4 services
+        self.pg_client = pg_client
+        self.graph_service = graph_service
 
     def merge_results_rrf(
         self,
@@ -186,14 +307,70 @@ class RetrievalService:
                 )
                 results_by_collection[collection_name] = results
 
+            # Quality: drop very weak semantic matches before RRF so noisy chunks
+            # don't win by rank-fusion alone.
+            raw_total = sum(len(v) for v in results_by_collection.values())
+            if DEFAULT_MAX_DISTANCE is not None and raw_total > 0:
+                filtered_by_collection: Dict[str, List[SearchResult]] = {}
+                for cname, results in results_by_collection.items():
+                    filtered_by_collection[cname] = [
+                        r for r in results
+                        if r.distance is None or r.distance <= DEFAULT_MAX_DISTANCE
+                    ]
+
+                filtered_total = sum(len(v) for v in filtered_by_collection.values())
+                if filtered_total > 0:
+                    results_by_collection = filtered_by_collection
+
             # Apply RRF merging
             merged_results = self.merge_results_rrf(results_by_collection, limit * 2)
 
             # Deduplicate by artifact_id
             deduplicated = self.deduplicate_by_artifact(merged_results)
 
-            # Limit to requested count
-            final_results = deduplicated[:limit]
+            def _extract_anchor_tokens(q: str) -> List[str]:
+                import re
+                tokens = re.findall(r"[a-z0-9]+", (q or "").lower())
+                stop = {
+                    "the","a","an","and","or","of","to","in","on","for","by","with","at","from",
+                    "is","are","was","were","be","been","it","this","that","as"
+                }
+                anchors = []
+                for t in tokens:
+                    if t in stop:
+                        continue
+                    if t.isdigit() or len(t) >= 4:
+                        anchors.append(t)
+                # keep unique in order
+                seen=set(); out=[]
+                for t in anchors:
+                    if t not in seen:
+                        out.append(t); seen.add(t)
+                return out
+
+            def _chunk_anchor_match_count(anchors: List[str], content: str) -> int:
+                if not anchors or not content:
+                    return 0
+                lc = content.lower()
+                return sum(1 for t in anchors if t in lc)
+
+            anchors = _extract_anchor_tokens(query)
+
+            # Limit to requested count, but skip low-quality chunks when the query is specific.
+            final_results: List[MergedResult] = []
+            for r in deduplicated:
+                if len(final_results) >= limit:
+                    break
+
+                if (
+                    CHUNK_MIN_ANCHOR_MATCHES > 0
+                    and r.result.is_chunk
+                    and len(anchors) >= 3  # only apply for sufficiently specific queries
+                ):
+                    if _chunk_anchor_match_count(anchors, r.result.content) < CHUNK_MIN_ANCHOR_MATCHES:
+                        continue
+
+                final_results.append(r)
 
             # Expand neighbors if requested
             if expand_neighbors:
@@ -340,3 +517,402 @@ class RetrievalService:
                 logger.error(
                     f"Failed to expand neighbors for {artifact_id}: {e}"
                 )
+
+    # =========================================================================
+    # V4: Graph Expansion Methods
+    # =========================================================================
+
+    async def hybrid_search_v4(
+        self,
+        query: str,
+        limit: int = 5,
+        include_memory: bool = False,
+        expand_neighbors: bool = False,
+        filters: Optional[Dict] = None,
+        # V4 parameters
+        graph_expand: bool = False,
+        graph_depth: int = 1,
+        graph_budget: int = 10,
+        graph_seed_limit: int = 5,
+        graph_filters: Optional[Dict] = None,
+        include_entities: bool = False,
+        # Optional: when provided, seed graph expansion from these Postgres event IDs
+        # (higher precision for queries that match semantic_event directly).
+        seed_event_ids: Optional[List[UUID]] = None
+    ) -> V4SearchResult:
+        """
+        V4 hybrid search with optional graph expansion.
+
+        When graph_expand=false, returns V3-compatible shape.
+        When graph_expand=true, performs graph expansion from seed results.
+
+        Args:
+            query: Search query text
+            limit: Maximum primary results to return
+            include_memory: Include memory collection in search
+            expand_neighbors: Include ±1 chunks for context (V3)
+            filters: Optional metadata filters
+
+            # V4 parameters
+            graph_expand: Enable graph expansion from results
+            graph_depth: Graph traversal depth (1-2)
+            graph_budget: Maximum related context items
+            graph_seed_limit: Maximum seed results for graph expansion
+            graph_filters: Category filters for graph expansion
+            include_entities: Include entity information in response
+
+        Returns:
+            V4SearchResult with primary_results, related_context, entities
+
+        Raises:
+            RetrievalError: If search fails
+        """
+        try:
+            # Perform standard hybrid search
+            primary_results = self.hybrid_search(
+                query=query,
+                limit=limit,
+                include_memory=include_memory,
+                expand_neighbors=expand_neighbors,
+                filters=filters
+            )
+
+            # V3 fallback: just return primary results
+            if not graph_expand or not self.graph_service:
+                return V4SearchResult(
+                    primary_results=primary_results,
+                    related_context=[],
+                    entities=[],
+                    expand_options={
+                        "graph_expand": False,
+                        "reason": "graph_expand=false or graph_service unavailable"
+                    }
+                )
+
+            # V4: Perform graph expansion
+            related_context, entities = await self._perform_graph_expansion(
+                primary_results=primary_results[:graph_seed_limit],
+                depth=graph_depth,
+                budget=graph_budget,
+                category_filter=graph_filters.get("categories") if graph_filters else None,
+                include_entities=include_entities,
+                seed_event_ids=seed_event_ids[:graph_seed_limit] if seed_event_ids else None
+            )
+
+            return V4SearchResult(
+                primary_results=primary_results,
+                related_context=related_context,
+                entities=entities,
+                expand_options={
+                    "graph_expand": True,
+                    "graph_depth": graph_depth,
+                    "graph_budget": graph_budget,
+                    "graph_seed_limit": graph_seed_limit,
+                    "seeds_used": len(primary_results[:graph_seed_limit])
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"V4 hybrid search failed: {e}")
+            raise RetrievalError(f"Failed to perform V4 hybrid search: {e}")
+
+    async def _perform_graph_expansion(
+        self,
+        primary_results: List[MergedResult],
+        depth: int = 1,
+        budget: int = 10,
+        category_filter: Optional[List[str]] = None,
+        include_entities: bool = False,
+        seed_event_ids: Optional[List[UUID]] = None
+    ) -> Tuple[List[RelatedContextItem], List[EntityInfo]]:
+        """
+        Perform graph expansion from primary results.
+
+        Algorithm:
+        1. Get artifact_uid for each primary result
+        2. Find events in those artifacts
+        3. Use graph service to expand from those events
+        4. Return related events as RelatedContextItem
+
+        Args:
+            primary_results: Seed results for expansion
+            depth: Expansion depth (1-2 hops)
+            budget: Maximum related items
+            category_filter: Event categories to include
+            include_entities: Whether to include entity information
+
+        Returns:
+            Tuple of (related_context, entities)
+        """
+        if not self.pg_client or not self.graph_service:
+            return [], []
+
+        try:
+            # Step 1: Get seed event IDs either from explicit seeds (preferred) or
+            # from mapping primary results to events.
+            if seed_event_ids is None:
+                seed_event_ids = await self._get_seed_events(primary_results)
+
+            if not seed_event_ids:
+                logger.info("No seed events found for graph expansion")
+                return [], []
+
+            # Step 2: Perform graph expansion
+            related_events = await self.graph_service.expand_from_events(
+                seed_event_ids=seed_event_ids,
+                budget=budget,
+                category_filter=category_filter
+            )
+
+            # Deduplicate related events by event_id. AGE expansion can return the same event
+            # multiple times through different connecting entities (e.g., same_actor + same_subject).
+            def _reason_priority(reason: str) -> int:
+                if reason.startswith("same_actor:"):
+                    return 2
+                if reason.startswith("same_subject:"):
+                    return 1
+                return 0
+
+            deduped: Dict[UUID, Any] = {}
+            for ev in related_events:
+                existing = deduped.get(ev.event_id)
+                if existing is None or _reason_priority(ev.reason) > _reason_priority(existing.reason):
+                    deduped[ev.event_id] = ev
+            related_events = list(deduped.values())
+
+            related_event_ids = [event.event_id for event in related_events]
+            evidence_map = await self._fetch_evidence_for_events(related_event_ids)
+
+            # Step 3: Convert to RelatedContextItem (with evidence)
+            related_context = []
+            for event in related_events:
+                related_context.append(RelatedContextItem(
+                    type="event",
+                    id=str(event.event_id),
+                    category=event.category,
+                    reason=event.reason,
+                    summary=event.narrative,
+                    artifact_uid=event.artifact_uid,
+                    revision_id=event.revision_id,
+                    event_time=event.event_time,
+                    evidence=evidence_map.get(event.event_id, [])
+                ))
+
+            # Step 4: Get entities if requested (from Postgres, includes aliases + mention counts)
+            entities = []
+            if include_entities:
+                # Get entities from both seed and related events
+                all_event_ids = (seed_event_ids + related_event_ids)[:50]
+                entities = await self._fetch_entities_for_events(all_event_ids)
+
+            logger.info(
+                f"Graph expansion: {len(seed_event_ids)} seeds -> "
+                f"{len(related_context)} related, {len(entities)} entities"
+            )
+
+            return related_context, entities
+
+        except Exception as e:
+            logger.error(f"Graph expansion failed: {e}")
+            return [], []
+
+    async def _fetch_evidence_for_events(
+        self,
+        event_ids: List[UUID]
+    ) -> Dict[UUID, List[Dict[str, Any]]]:
+        """
+        Fetch evidence quotes for the given events.
+
+        Returns:
+            Map of event_id -> list[{quote, artifact_uid, start_char, end_char, chunk_id}]
+        """
+        if not self.pg_client or not event_ids:
+            return {}
+
+        placeholders = ", ".join(f"${i+1}" for i in range(len(event_ids)))
+        sql = f"""
+        SELECT event_id, quote, artifact_uid, start_char, end_char, chunk_id
+        FROM event_evidence
+        WHERE event_id IN ({placeholders})
+        ORDER BY event_id, start_char
+        """
+
+        rows = await self.pg_client.fetch_all(sql, *event_ids)
+        out: Dict[UUID, List[Dict[str, Any]]] = {}
+        for row in rows:
+            eid = row["event_id"]
+            out.setdefault(eid, []).append({
+                "quote": row["quote"],
+                "artifact_uid": row.get("artifact_uid"),
+                "start_char": row.get("start_char"),
+                "end_char": row.get("end_char"),
+                "chunk_id": row.get("chunk_id")
+            })
+        return out
+
+    async def _fetch_entities_for_events(
+        self,
+        event_ids: List[UUID]
+    ) -> List[EntityInfo]:
+        """
+        Fetch entities involved in the given events, enriched with aliases and mention counts.
+        """
+        if not self.pg_client or not event_ids:
+            return []
+
+        placeholders = ", ".join(f"${i+1}" for i in range(len(event_ids)))
+        sql = f"""
+        WITH evs AS (
+          SELECT event_id, artifact_uid, revision_id
+          FROM semantic_event
+          WHERE event_id IN ({placeholders})
+        ),
+        rel_entities AS (
+          SELECT ea.entity_id, evs.artifact_uid, evs.revision_id
+          FROM evs
+          JOIN event_actor ea ON ea.event_id = evs.event_id
+          UNION ALL
+          SELECT es.entity_id, evs.artifact_uid, evs.revision_id
+          FROM evs
+          JOIN event_subject es ON es.event_id = evs.event_id
+        ),
+        mention_counts AS (
+          SELECT re.entity_id, COUNT(*)::int AS mention_count
+          FROM rel_entities re
+          JOIN entity_mention em
+            ON em.entity_id = re.entity_id
+           AND em.artifact_uid = re.artifact_uid
+           AND em.revision_id = re.revision_id
+          GROUP BY re.entity_id
+        ),
+        base AS (
+          SELECT DISTINCT re.entity_id
+          FROM rel_entities re
+        )
+        SELECT e.entity_id,
+               e.canonical_name,
+               e.entity_type,
+               e.role,
+               e.organization,
+               COALESCE(mc.mention_count, 0) AS mention_count,
+               COALESCE(array_agg(DISTINCT ea.alias) FILTER (WHERE ea.alias IS NOT NULL), ARRAY[]::text[]) AS aliases
+        FROM base b
+        JOIN entity e ON e.entity_id = b.entity_id
+        LEFT JOIN mention_counts mc ON mc.entity_id = b.entity_id
+        LEFT JOIN entity_alias ea ON ea.entity_id = b.entity_id
+        GROUP BY e.entity_id, e.canonical_name, e.entity_type, e.role, e.organization, mc.mention_count
+        ORDER BY COALESCE(mc.mention_count, 0) DESC, e.canonical_name ASC
+        """
+
+        rows = await self.pg_client.fetch_all(sql, *event_ids)
+        entities: List[EntityInfo] = []
+        for row in rows:
+            entities.append(EntityInfo(
+                entity_id=str(row["entity_id"]),
+                name=row["canonical_name"],
+                type=row["entity_type"],
+                role=row.get("role"),
+                organization=row.get("organization"),
+                mention_count=int(row.get("mention_count") or 0),
+                aliases=list(row.get("aliases") or [])
+            ))
+        return entities
+
+    async def _get_seed_events(
+        self,
+        results: List[MergedResult]
+    ) -> List[UUID]:
+        """
+        Get event IDs from search results for graph seeding.
+
+        Maps chunk/artifact IDs to events via artifact_revision.
+
+        Args:
+            results: Primary search results
+
+        Returns:
+            List of event UUIDs
+        """
+        if not self.pg_client:
+            return []
+
+        seed_events = []
+
+        for result in results:
+            try:
+                # Get artifact_id from result
+                artifact_id = result.result.artifact_id or result.result.id
+                if "::" in artifact_id:
+                    artifact_id = artifact_id.split("::")[0]
+
+                # Look up artifact_uid from artifact_revision
+                revision = await self.pg_client.fetch_one(
+                    """
+                    SELECT artifact_uid, revision_id
+                    FROM artifact_revision
+                    WHERE artifact_id = $1 AND is_latest = true
+                    LIMIT 1
+                    """,
+                    artifact_id
+                )
+
+                if not revision:
+                    continue
+
+                artifact_uid = revision["artifact_uid"]
+                revision_id = revision["revision_id"]
+
+                # Get events for this artifact revision
+                events = await self.pg_client.fetch_all(
+                    """
+                    SELECT event_id FROM semantic_event
+                    WHERE artifact_uid = $1 AND revision_id = $2
+                    LIMIT 10
+                    """,
+                    artifact_uid,
+                    revision_id
+                )
+
+                for event in events:
+                    seed_events.append(event["event_id"])
+
+            except Exception as e:
+                logger.warning(f"Failed to get seed events for result: {e}")
+                continue
+
+        # Deduplicate
+        return list(set(seed_events))
+
+    async def get_artifact_uid_for_chunk(
+        self,
+        chunk_id: str
+    ) -> Optional[str]:
+        """
+        Look up artifact_uid for a chunk ID.
+
+        Args:
+            chunk_id: Chunk ID (format: artifact_id::index)
+
+        Returns:
+            artifact_uid or None
+        """
+        if not self.pg_client:
+            return None
+
+        artifact_id = chunk_id.split("::")[0] if "::" in chunk_id else chunk_id
+
+        try:
+            revision = await self.pg_client.fetch_one(
+                """
+                SELECT artifact_uid FROM artifact_revision
+                WHERE artifact_id = $1 AND is_latest = true
+                LIMIT 1
+                """,
+                artifact_id
+            )
+
+            return revision["artifact_uid"] if revision else None
+
+        except Exception as e:
+            logger.error(f"Failed to get artifact_uid for {chunk_id}: {e}")
+            return None

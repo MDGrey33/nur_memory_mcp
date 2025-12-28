@@ -1,8 +1,21 @@
 """
-Data models for V3 Postgres tables.
+Data models for V3 and V4 Postgres tables.
+
+V3 models:
+- ArtifactRevision
+- EventJob
+- SemanticEvent
+- EventEvidence
+
+V4 models (added):
+- Entity
+- EntityAlias
+- EntityMention
+- EventActor
+- EventSubject
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
@@ -170,3 +183,128 @@ def job_to_dict(job: EventJob) -> Dict[str, Any]:
         "last_error_message": job.last_error_message,
         "next_run_at": job.next_run_at.isoformat() if job.next_run_at else None
     }
+
+
+# =============================================================================
+# V4 Models
+# =============================================================================
+
+@dataclass
+class Entity:
+    """V4 canonical entity with embedding support."""
+    entity_id: UUID
+    entity_type: str  # person, org, project, object, place, other
+    canonical_name: str
+    normalized_name: str  # lowercase, stripped for matching
+    role: Optional[str] = None  # Job title
+    organization: Optional[str] = None  # Company
+    email: Optional[str] = None
+    first_seen_artifact_uid: str = ""
+    first_seen_revision_id: str = ""
+    needs_review: bool = False
+    created_at: Optional[datetime] = None
+    # Note: context_embedding is not included (vector type)
+
+
+@dataclass
+class EntityAlias:
+    """V4 entity alias."""
+    alias_id: UUID
+    entity_id: UUID
+    alias: str
+    normalized_alias: str
+    created_at: Optional[datetime] = None
+
+
+@dataclass
+class EntityMention:
+    """V4 entity mention occurrence."""
+    mention_id: UUID
+    entity_id: UUID
+    artifact_uid: str
+    revision_id: str
+    surface_form: str
+    start_char: Optional[int] = None
+    end_char: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+
+@dataclass
+class EventActor:
+    """V4 event-actor relationship."""
+    event_id: UUID
+    entity_id: UUID
+    role: str  # owner, contributor, reviewer, stakeholder, other
+
+
+@dataclass
+class EventSubject:
+    """V4 event-subject relationship."""
+    event_id: UUID
+    entity_id: UUID
+
+
+# V4 Response models
+
+@dataclass
+class EntityWithMentions:
+    """Entity with mention counts for API responses."""
+    entity_id: str
+    entity_type: str
+    canonical_name: str
+    role: Optional[str] = None
+    organization: Optional[str] = None
+    mention_count: int = 0
+    aliases: List[str] = field(default_factory=list)
+
+
+@dataclass
+class EntityResolutionResult:
+    """Result of entity resolution for API responses."""
+    entity_id: str
+    is_new: bool
+    merged_from: Optional[str] = None
+    uncertain_match: Optional[str] = None
+    canonical_name: str = ""
+
+
+# V4 Helper functions
+
+def entity_to_dict(entity: Entity, aliases: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Convert Entity to API response dict."""
+    result = {
+        "entity_id": str(entity.entity_id),
+        "entity_type": entity.entity_type,
+        "canonical_name": entity.canonical_name,
+        "normalized_name": entity.normalized_name,
+        "role": entity.role,
+        "organization": entity.organization,
+        "email": entity.email,
+        "first_seen_artifact_uid": entity.first_seen_artifact_uid,
+        "first_seen_revision_id": entity.first_seen_revision_id,
+        "needs_review": entity.needs_review,
+        "created_at": entity.created_at.isoformat() if entity.created_at else None
+    }
+
+    if aliases is not None:
+        result["aliases"] = aliases
+
+    return result
+
+
+def event_with_entities_to_dict(
+    event: SemanticEvent,
+    evidence: Optional[List[EventEvidence]] = None,
+    actors: Optional[List[Dict[str, Any]]] = None,
+    subjects: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+    """Convert SemanticEvent to V4 API response dict with entity relationships."""
+    result = event_to_dict(event, evidence)
+
+    if actors is not None:
+        result["actors_resolved"] = actors
+
+    if subjects is not None:
+        result["subjects_resolved"] = subjects
+
+    return result

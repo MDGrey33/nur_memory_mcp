@@ -1,0 +1,251 @@
+version: '3.8'
+
+# MCP Memory Server V4 - Docker Compose Configuration
+#
+# This file defines the complete V4 stack with:
+# - chroma: Vector database for embeddings
+# - postgres: Events database with AGE extension for graph
+# - mcp-server: FastMCP server with V4 hybrid_search (graph expansion)
+# - event-worker: Async event extraction + entity resolution + graph upsert
+#
+# Usage:
+#   1. Copy env.v4.example to .env
+#   2. Edit .env with your configuration (REQUIRED: OPENAI_API_KEY, POSTGRES_PASSWORD)
+#   3. docker compose -f docker-compose.v4.yml up -d
+#   4. Run migrations (see deployment-guide.md)
+
+services:
+  # ============================================================================
+  # ChromaDB - Vector database for embeddings
+  # ============================================================================
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: mcp-chroma-v4
+    ports:
+      - "8001:8000"  # External:Internal
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/api/v2/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  # ============================================================================
+  # PostgreSQL with AGE - Events database + Graph
+  # ============================================================================
+  postgres:
+    # Option 1: Use pre-built AGE image (recommended)
+    image: apache/age:PG16-latest
+    # Option 2: Build custom image with pgvector
+    # build:
+    #   context: ./docker
+    #   dockerfile: Dockerfile.postgres-age
+    container_name: mcp-postgres-v4
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-events}
+      - POSTGRES_USER=${POSTGRES_USER:-events}
+      # SECURITY: Password MUST be set in .env file
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - see env.v4.example}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Mount V3 init script (base tables)
+      - ../init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      # Mount V4 migrations
+      - ./migrations/008_v4_entity_tables.sql:/docker-entrypoint-initdb.d/02-v4-entities.sql:ro
+      - ./migrations/009_v4_age_setup.sql:/docker-entrypoint-initdb.d/03-v4-age.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-events} -d ${POSTGRES_DB:-events}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s  # AGE may need more startup time
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  # ============================================================================
+  # MCP Memory Server V4 - HTTP Transport
+  # ============================================================================
+  mcp-server:
+    build:
+      context: ../../implementation/mcp-server
+      dockerfile: ../../../deployment/Dockerfile
+      target: production
+    image: mcp-memory-server:v4
+    container_name: mcp-server-v4
+    ports:
+      - "3000:3000"
+    environment:
+      # OpenAI Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?OPENAI_API_KEY is required}
+      - OPENAI_EMBED_MODEL=${OPENAI_EMBED_MODEL:-text-embedding-3-large}
+      - OPENAI_EVENT_MODEL=${OPENAI_EVENT_MODEL:-gpt-4o-mini}
+      - OPENAI_EMBED_DIMS=${OPENAI_EMBED_DIMS:-3072}
+
+      # ChromaDB Configuration
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+
+      # PostgreSQL Configuration
+      - EVENTS_DB_DSN=${EVENTS_DB_DSN:?EVENTS_DB_DSN is required - see env.v4.example}
+
+      # Server Configuration
+      - MCP_PORT=3000
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # V4 Graph Configuration
+      - V4_GRAPH_ENABLED=${V4_GRAPH_ENABLED:-true}
+      - V4_GRAPH_NAME=${V4_GRAPH_NAME:-nur}
+      - V4_GRAPH_QUERY_TIMEOUT_MS=${V4_GRAPH_QUERY_TIMEOUT_MS:-500}
+      - V4_GRAPH_BUDGET_DEFAULT=${V4_GRAPH_BUDGET_DEFAULT:-10}
+      - V4_GRAPH_BUDGET_MAX=${V4_GRAPH_BUDGET_MAX:-100}
+      - V4_GRAPH_SEED_LIMIT_DEFAULT=${V4_GRAPH_SEED_LIMIT_DEFAULT:-5}
+      - V4_GRAPH_SEED_LIMIT_MAX=${V4_GRAPH_SEED_LIMIT_MAX:-20}
+
+      # V4 Entity Resolution Configuration
+      - ENTITY_SIMILARITY_THRESHOLD=${ENTITY_SIMILARITY_THRESHOLD:-0.85}
+      - ENTITY_MAX_CANDIDATES=${ENTITY_MAX_CANDIDATES:-5}
+      - ENTITY_DEDUP_MODEL=${ENTITY_DEDUP_MODEL:-gpt-4o-mini}
+
+      # Connection Pool (increased for V4)
+      - PG_POOL_SIZE=${PG_POOL_SIZE:-15}
+      - PG_POOL_MAX_OVERFLOW=${PG_POOL_MAX_OVERFLOW:-30}
+    volumes:
+      - ../healthcheck.py:/app/healthcheck.py:ro
+    healthcheck:
+      test: ["CMD", "python", "/app/healthcheck.py", "--service", "mcp-server", "--v4"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s  # Increased for V4 initialization
+    depends_on:
+      chroma:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  # ============================================================================
+  # Event Worker V4 - Async extraction + entity resolution + graph upsert
+  # ============================================================================
+  event-worker:
+    build:
+      context: ../../implementation/mcp-server
+      dockerfile: ../../../deployment/Dockerfile
+      target: production
+    image: mcp-memory-server:v4
+    container_name: mcp-event-worker-v4
+    command: python -m src.worker
+    environment:
+      # OpenAI Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?OPENAI_API_KEY is required}
+      - OPENAI_EVENT_MODEL=${OPENAI_EVENT_MODEL:-gpt-4o-mini}
+      - OPENAI_EMBED_MODEL=${OPENAI_EMBED_MODEL:-text-embedding-3-large}
+      - OPENAI_EMBED_DIMS=${OPENAI_EMBED_DIMS:-3072}
+
+      # ChromaDB Configuration
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+
+      # PostgreSQL Configuration
+      - EVENTS_DB_DSN=${EVENTS_DB_DSN:?EVENTS_DB_DSN is required - see env.v4.example}
+
+      # Worker Configuration
+      - WORKER_ID=${WORKER_ID:-worker-v4-1}
+      - POLL_INTERVAL_MS=${POLL_INTERVAL_MS:-1000}
+      - EVENT_MAX_ATTEMPTS=${EVENT_MAX_ATTEMPTS:-5}
+
+      # V4 Worker Configuration
+      - V4_WORKER_GRAPH_UPSERT=${V4_WORKER_GRAPH_UPSERT:-true}
+      - V4_GRAPH_UPSERT_BATCH_SIZE=${V4_GRAPH_UPSERT_BATCH_SIZE:-50}
+      - V4_GRAPH_ENABLED=${V4_GRAPH_ENABLED:-true}
+      - V4_GRAPH_NAME=${V4_GRAPH_NAME:-nur}
+
+      # V4 Entity Resolution
+      - ENTITY_SIMILARITY_THRESHOLD=${ENTITY_SIMILARITY_THRESHOLD:-0.85}
+      - ENTITY_MAX_CANDIDATES=${ENTITY_MAX_CANDIDATES:-5}
+      - ENTITY_DEDUP_MODEL=${ENTITY_DEDUP_MODEL:-gpt-4o-mini}
+
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ../healthcheck.py:/app/healthcheck.py:ro
+    healthcheck:
+      test: ["CMD", "python", "/app/healthcheck.py", "--service", "worker", "--v4"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      chroma:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mcp-server:
+        condition: service_started
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  chroma_data:
+    driver: local
+    name: mcp_memory_v4_chroma_data
+  postgres_data:
+    driver: local
+    name: mcp_memory_v4_postgres_data
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  mcp-network:
+    driver: bridge
+    name: mcp-memory-v4-network

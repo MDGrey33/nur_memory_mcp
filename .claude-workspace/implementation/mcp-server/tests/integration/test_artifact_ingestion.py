@@ -45,7 +45,8 @@ def mock_services():
 
 
 @pytest.mark.integration
-def test_ingest_small_artifact(mock_services):
+@pytest.mark.asyncio
+async def test_ingest_small_artifact(mock_services):
     """Test ingesting small artifact that doesn't need chunking."""
     from server import artifact_ingest
 
@@ -54,7 +55,7 @@ def test_ingest_small_artifact(mock_services):
     mock_services["chunk"].should_chunk.return_value = (False, 50)
     mock_services["chunk"].count_tokens.return_value = 50
 
-    result = artifact_ingest(
+    result = await artifact_ingest(
         artifact_type="doc",
         source_system="manual",
         content=content,
@@ -75,7 +76,8 @@ def test_ingest_small_artifact(mock_services):
 
 
 @pytest.mark.integration
-def test_ingest_large_artifact(mock_services):
+@pytest.mark.asyncio
+async def test_ingest_large_artifact(mock_services):
     """Test ingesting large artifact that needs chunking."""
     from server import artifact_ingest
     from storage.models import Chunk
@@ -113,7 +115,7 @@ def test_ingest_large_artifact(mock_services):
     # Mock batch embeddings
     mock_services["embed"].generate_embeddings_batch.return_value = [[0.1] * 3072] * 2
 
-    result = artifact_ingest(
+    result = await artifact_ingest(
         artifact_type="doc",
         source_system="manual",
         content=content,
@@ -130,7 +132,8 @@ def test_ingest_large_artifact(mock_services):
 
 
 @pytest.mark.integration
-def test_ingest_idempotency(mock_services):
+@pytest.mark.asyncio
+async def test_ingest_idempotency(mock_services):
     """Test ingesting same artifact twice (idempotent)."""
     from server import artifact_ingest
 
@@ -142,7 +145,7 @@ def test_ingest_idempotency(mock_services):
     mock_services["chunk"].count_tokens.return_value = 50
 
     with patch("server.get_artifact_by_source", return_value=None):
-        result1 = artifact_ingest(
+        result1 = await artifact_ingest(
             artifact_type="doc",
             source_system="manual",
             source_id="doc123",
@@ -163,7 +166,7 @@ def test_ingest_idempotency(mock_services):
     }
 
     with patch("server.get_artifact_by_source", return_value=mock_existing):
-        result2 = artifact_ingest(
+        result2 = await artifact_ingest(
             artifact_type="doc",
             source_system="manual",
             source_id="doc123",
@@ -175,7 +178,8 @@ def test_ingest_idempotency(mock_services):
 
 
 @pytest.mark.integration
-def test_ingest_content_change(mock_services):
+@pytest.mark.asyncio
+async def test_ingest_content_change(mock_services):
     """Test ingesting updated content for existing artifact."""
     from server import artifact_ingest
 
@@ -203,7 +207,7 @@ def test_ingest_content_change(mock_services):
     with patch("server.get_artifact_by_source", return_value=mock_existing), \
          patch("server.delete_artifact_cascade") as mock_delete:
 
-        result = artifact_ingest(
+        result = await artifact_ingest(
             artifact_type="doc",
             source_system="manual",
             source_id="doc123",
@@ -219,7 +223,8 @@ def test_ingest_content_change(mock_services):
 
 
 @pytest.mark.integration
-def test_ingest_two_phase_atomic_failure(mock_services):
+@pytest.mark.asyncio
+async def test_ingest_two_phase_atomic_failure(mock_services):
     """Test two-phase atomic write fails if embedding generation fails."""
     from server import artifact_ingest
     from storage.models import Chunk
@@ -248,7 +253,7 @@ def test_ingest_two_phase_atomic_failure(mock_services):
     # Make batch embedding fail (Phase 1 failure)
     mock_services["embed"].generate_embeddings_batch.side_effect = EmbeddingError("API error")
 
-    result = artifact_ingest(
+    result = await artifact_ingest(
         artifact_type="doc",
         source_system="manual",
         content=content
@@ -263,11 +268,12 @@ def test_ingest_two_phase_atomic_failure(mock_services):
 
 
 @pytest.mark.integration
-def test_ingest_invalid_artifact_type(mock_services):
+@pytest.mark.asyncio
+async def test_ingest_invalid_artifact_type(mock_services):
     """Test ingestion with invalid artifact type."""
     from server import artifact_ingest
 
-    result = artifact_ingest(
+    result = await artifact_ingest(
         artifact_type="invalid_type",
         source_system="manual",
         content="Test"
@@ -278,11 +284,12 @@ def test_ingest_invalid_artifact_type(mock_services):
 
 
 @pytest.mark.integration
-def test_ingest_empty_content(mock_services):
+@pytest.mark.asyncio
+async def test_ingest_empty_content(mock_services):
     """Test ingestion with empty content."""
     from server import artifact_ingest
 
-    result = artifact_ingest(
+    result = await artifact_ingest(
         artifact_type="doc",
         source_system="manual",
         content=""
@@ -293,14 +300,15 @@ def test_ingest_empty_content(mock_services):
 
 
 @pytest.mark.integration
-def test_ingest_with_metadata(mock_services):
+@pytest.mark.asyncio
+async def test_ingest_with_metadata(mock_services):
     """Test ingestion with full metadata."""
     from server import artifact_ingest
 
     mock_services["chunk"].should_chunk.return_value = (False, 100)
     mock_services["chunk"].count_tokens.return_value = 100
 
-    result = artifact_ingest(
+    result = await artifact_ingest(
         artifact_type="email",
         source_system="gmail",
         content="Email content",

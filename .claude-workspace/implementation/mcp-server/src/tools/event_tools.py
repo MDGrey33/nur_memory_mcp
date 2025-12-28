@@ -12,6 +12,7 @@ Provides 5 new tools:
 import logging
 from typing import Optional, List, Dict, Any
 from uuid import UUID
+import re
 
 logger = logging.getLogger("event_tools")
 
@@ -126,9 +127,72 @@ async def event_search(
         query_parts.append(f"LIMIT ${param_idx}")
         params.append(limit)
 
-        # Execute query
+        # Execute query (primary: AND semantics via plainto_tsquery)
         sql = " ".join(query_parts)
         events = await pg_client.fetch_all(sql, *params)
+
+        # Fallback: if query returns nothing, retry with OR semantics to improve recall.
+        # This helps queries that contain extra terms not present in the narrative (e.g., "API delivery")
+        # while still matching the core event ("security audit risk").
+        if query and not events:
+            try:
+                # Extract safe tokens and build a websearch query with OR.
+                tokens = [t for t in re.findall(r"[A-Za-z]+", query) if len(t) >= 3]
+                tokens = tokens[:12]  # cap to keep tsquery reasonable
+                if tokens:
+                    or_query = " OR ".join(tokens)
+
+                    # Rebuild query using websearch_to_tsquery for safer parsing.
+                    query_parts_or = ["""
+                        SELECT e.*,
+                               ar.title as source_title,
+                               ar.document_date as source_document_date,
+                               ar.source_type as source_source_type,
+                               ar.document_status as source_document_status,
+                               ar.author_title as source_author_title,
+                               ar.distribution_scope as source_distribution_scope,
+                               ar.source_system as source_source_system,
+                               ar.ingested_at as source_ingested_at
+                        FROM semantic_event e
+                        LEFT JOIN artifact_revision ar ON e.artifact_uid = ar.artifact_uid AND e.revision_id = ar.revision_id
+                        WHERE 1=1
+                    """]
+                    params_or = []
+                    param_idx_or = 1
+
+                    # Reapply the same non-query filters
+                    if category:
+                        query_parts_or.append(f"AND e.category = ${param_idx_or}")
+                        params_or.append(category)
+                        param_idx_or += 1
+                    if time_from:
+                        query_parts_or.append(f"AND e.event_time >= ${param_idx_or}")
+                        params_or.append(time_from)
+                        param_idx_or += 1
+                    if time_to:
+                        query_parts_or.append(f"AND e.event_time <= ${param_idx_or}")
+                        params_or.append(time_to)
+                        param_idx_or += 1
+                    if artifact_uid:
+                        query_parts_or.append(f"AND e.artifact_uid = ${param_idx_or}")
+                        params_or.append(artifact_uid)
+                        param_idx_or += 1
+
+                    query_parts_or.append(
+                        f"AND to_tsvector('english', e.narrative) @@ websearch_to_tsquery('english', ${param_idx_or})"
+                    )
+                    params_or.append(or_query)
+                    param_idx_or += 1
+
+                    query_parts_or.append("ORDER BY e.event_time DESC NULLS LAST, e.created_at DESC")
+                    query_parts_or.append(f"LIMIT ${param_idx_or}")
+                    params_or.append(limit)
+
+                    sql_or = " ".join(query_parts_or)
+                    events = await pg_client.fetch_all(sql_or, *params_or)
+            except Exception as _:
+                # If fallback fails, keep original empty set.
+                pass
 
         # Batch fetch evidence if requested (avoids N+1 query)
         evidence_map = {}
@@ -429,5 +493,238 @@ async def event_list_for_revision(
         logger.error(f"event_list_for_revision error: {e}", exc_info=True)
         return {
             "error": f"Failed to list events: {str(e)}",
+            "error_code": "INTERNAL_ERROR"
+        }
+
+
+# =============================================================================
+# V4 Tools
+# =============================================================================
+
+async def graph_health(
+    graph_service
+) -> dict:
+    """
+    Get graph health statistics (V4).
+
+    Args:
+        graph_service: GraphService instance
+
+    Returns:
+        Dict with graph health stats including node/edge counts
+    """
+    try:
+        if graph_service is None:
+            return {
+                "status": "unavailable",
+                "error": "Graph service not initialized",
+                "age_enabled": False,
+                "graph_exists": False
+            }
+
+        health = await graph_service.get_health()
+
+        return {
+            "status": "healthy" if health.graph_exists else "degraded",
+            "age_enabled": health.age_enabled,
+            "graph_exists": health.graph_exists,
+            "node_counts": {
+                "entity": health.entity_node_count,
+                "event": health.event_node_count
+            },
+            "edge_counts": {
+                "acted_in": health.acted_in_edge_count,
+                "about": health.about_edge_count,
+                "possibly_same": health.possibly_same_edge_count
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"graph_health error: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "error": str(e),
+            "error_code": "INTERNAL_ERROR"
+        }
+
+
+async def entity_search(
+    pg_client,
+    query: Optional[str] = None,
+    entity_type: Optional[str] = None,
+    limit: int = 20,
+    include_aliases: bool = True,
+    needs_review_only: bool = False
+) -> dict:
+    """
+    Search entities (V4).
+
+    Args:
+        pg_client: Postgres client instance
+        query: Text search on canonical_name (optional)
+        entity_type: Filter by type (person, org, etc.)
+        limit: Maximum results (1-100)
+        include_aliases: Include aliases in response
+        needs_review_only: Only return entities needing review
+
+    Returns:
+        Dict with entities list
+    """
+    try:
+        # Validate inputs
+        if limit < 1 or limit > 100:
+            return {
+                "error": "Invalid limit. Must be between 1 and 100",
+                "error_code": "INVALID_PARAMETER"
+            }
+
+        valid_types = ["person", "org", "project", "object", "place", "other"]
+        if entity_type and entity_type not in valid_types:
+            return {
+                "error": f"Invalid entity_type: {entity_type}. Must be one of: {', '.join(valid_types)}",
+                "error_code": "INVALID_PARAMETER"
+            }
+
+        # Build query
+        query_parts = ["SELECT * FROM entity WHERE 1=1"]
+        params = []
+        param_idx = 1
+
+        if entity_type:
+            query_parts.append(f"AND entity_type = ${param_idx}")
+            params.append(entity_type)
+            param_idx += 1
+
+        if needs_review_only:
+            query_parts.append("AND needs_review = true")
+
+        if query:
+            query_parts.append(f"AND canonical_name ILIKE ${param_idx}")
+            params.append(f"%{query}%")
+            param_idx += 1
+
+        query_parts.append("ORDER BY created_at DESC")
+        query_parts.append(f"LIMIT ${param_idx}")
+        params.append(limit)
+
+        sql = " ".join(query_parts)
+        entities = await pg_client.fetch_all(sql, *params)
+
+        # Batch fetch aliases if requested
+        alias_map = {}
+        if include_aliases and entities:
+            entity_ids = [e["entity_id"] for e in entities]
+            placeholders = ", ".join(f"${i+1}" for i in range(len(entity_ids)))
+            alias_sql = f"""
+            SELECT entity_id, alias FROM entity_alias
+            WHERE entity_id IN ({placeholders})
+            ORDER BY entity_id
+            """
+            alias_rows = await pg_client.fetch_all(alias_sql, *entity_ids)
+
+            for row in alias_rows:
+                eid = row["entity_id"]
+                if eid not in alias_map:
+                    alias_map[eid] = []
+                alias_map[eid].append(row["alias"])
+
+        # Format response
+        formatted = []
+        for entity in entities:
+            formatted.append({
+                "entity_id": str(entity["entity_id"]),
+                "entity_type": entity["entity_type"],
+                "canonical_name": entity["canonical_name"],
+                "role": entity.get("role"),
+                "organization": entity.get("organization"),
+                "email": entity.get("email"),
+                "needs_review": entity.get("needs_review", False),
+                "first_seen_artifact_uid": entity["first_seen_artifact_uid"],
+                "aliases": alias_map.get(entity["entity_id"], []) if include_aliases else None,
+                "created_at": entity["created_at"].isoformat() if entity.get("created_at") else None
+            })
+
+        return {
+            "entities": formatted,
+            "total": len(formatted)
+        }
+
+    except Exception as e:
+        logger.error(f"entity_search error: {e}", exc_info=True)
+        return {
+            "error": f"Entity search failed: {str(e)}",
+            "error_code": "INTERNAL_ERROR"
+        }
+
+
+async def entity_review_queue(
+    pg_client,
+    limit: int = 20
+) -> dict:
+    """
+    Get entities needing manual review (V4).
+
+    Returns entities with needs_review=true along with potential matches.
+
+    Args:
+        pg_client: Postgres client instance
+        limit: Maximum results
+
+    Returns:
+        Dict with entities needing review and suggested matches
+    """
+    try:
+        # Get entities needing review
+        query = """
+        SELECT e1.entity_id, e1.canonical_name, e1.entity_type,
+               e1.role, e1.organization,
+               e1.first_seen_artifact_uid, e1.first_seen_revision_id,
+               e2.entity_id AS similar_entity_id,
+               e2.canonical_name AS similar_name,
+               1 - (e1.context_embedding <=> e2.context_embedding) AS similarity
+        FROM entity e1
+        JOIN entity e2 ON e1.entity_type = e2.entity_type
+                      AND e1.entity_id != e2.entity_id
+                      AND e2.needs_review = false
+        WHERE e1.needs_review = true
+          AND e1.context_embedding IS NOT NULL
+          AND e2.context_embedding IS NOT NULL
+          AND (e1.context_embedding <=> e2.context_embedding) < 0.20
+        ORDER BY similarity DESC
+        LIMIT $1
+        """
+
+        rows = await pg_client.fetch_all(query, limit)
+
+        # Group by entity
+        entity_map = {}
+        for row in rows:
+            eid = str(row["entity_id"])
+            if eid not in entity_map:
+                entity_map[eid] = {
+                    "entity_id": eid,
+                    "canonical_name": row["canonical_name"],
+                    "entity_type": row["entity_type"],
+                    "role": row.get("role"),
+                    "organization": row.get("organization"),
+                    "first_seen_artifact_uid": row["first_seen_artifact_uid"],
+                    "potential_matches": []
+                }
+
+            entity_map[eid]["potential_matches"].append({
+                "entity_id": str(row["similar_entity_id"]),
+                "canonical_name": row["similar_name"],
+                "similarity": round(row["similarity"], 3)
+            })
+
+        return {
+            "review_queue": list(entity_map.values()),
+            "total": len(entity_map)
+        }
+
+    except Exception as e:
+        logger.error(f"entity_review_queue error: {e}", exc_info=True)
+        return {
+            "error": f"Failed to get review queue: {str(e)}",
             "error_code": "INTERNAL_ERROR"
         }

@@ -1,7 +1,7 @@
 """Integration tests for search and retrieval operations."""
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
 
 
 @pytest.fixture
@@ -23,6 +23,9 @@ def mock_search_services():
 
         mock_config.openai_embed_model = "text-embedding-3-large"
         mock_config.openai_embed_dims = 3072
+
+        # hybrid_search tool now calls retrieval_service.hybrid_search_v4 (async)
+        mock_retrieval.hybrid_search_v4 = AsyncMock()
 
         yield {
             "embed": mock_embed,
@@ -155,7 +158,8 @@ def test_search_with_neighbor_expansion(mock_search_services):
 
 
 @pytest.mark.integration
-def test_hybrid_search_with_memory(mock_search_services):
+@pytest.mark.asyncio
+async def test_hybrid_search_with_memory(mock_search_services):
     """Test hybrid search including memory collection."""
     from server import hybrid_search
     from storage.models import SearchResult, MergedResult
@@ -190,18 +194,30 @@ def test_hybrid_search_with_memory(mock_search_services):
         )
     ]
 
-    mock_search_services["retrieval"].hybrid_search.return_value = mock_results
+    # Provide a fake V4SearchResult object with to_dict() matching server expectations.
+    mock_search_services["retrieval"].hybrid_search_v4.return_value = MagicMock(
+        to_dict=lambda: {"primary_results": [
+            {
+                "id": r.result.id,
+                "content": r.result.content,
+                "metadata": r.result.metadata,
+                "collection": r.result.collection,
+                "rrf_score": r.rrf_score,
+                "artifact_uid": None
+            } for r in mock_results
+        ], "related_context": [], "entities": [], "expand_options": {}}
+    )
 
-    result = hybrid_search(query="test query", limit=5, include_memory=True)
+    result = await hybrid_search(query="test query", limit=5, include_memory=True)
 
-    assert "Error" not in result
-    assert "Found 2 results" in result
-    assert "memory" in result.lower()
-    assert "artifacts" in result.lower()
+    assert "error" not in result
+    assert "primary_results" in result
+    assert len(result["primary_results"]) == 2
 
 
 @pytest.mark.integration
-def test_hybrid_search_without_memory(mock_search_services):
+@pytest.mark.asyncio
+async def test_hybrid_search_without_memory(mock_search_services):
     """Test hybrid search excluding memory collection."""
     from server import hybrid_search
     from storage.models import SearchResult, MergedResult
@@ -223,14 +239,24 @@ def test_hybrid_search_without_memory(mock_search_services):
         )
     ]
 
-    mock_search_services["retrieval"].hybrid_search.return_value = mock_results
+    mock_search_services["retrieval"].hybrid_search_v4.return_value = MagicMock(
+        to_dict=lambda: {"primary_results": [
+            {
+                "id": r.result.id,
+                "content": r.result.content,
+                "metadata": r.result.metadata,
+                "collection": r.result.collection,
+                "rrf_score": r.rrf_score,
+                "artifact_uid": None
+            } for r in mock_results
+        ], "related_context": [], "entities": [], "expand_options": {}}
+    )
 
-    result = hybrid_search(query="test query", limit=5, include_memory=False)
+    result = await hybrid_search(query="test query", limit=5, include_memory=False)
 
-    assert "Error" not in result
-    assert "artifacts" in result.lower()
-    # Should mention collections searched
-    assert "artifact_chunks" in result.lower() or "artifacts" in result.lower()
+    assert "error" not in result
+    assert "primary_results" in result
+    assert len(result["primary_results"]) == 1
 
 
 @pytest.mark.integration

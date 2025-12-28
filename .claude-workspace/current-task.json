@@ -1,8 +1,27 @@
 {
-  "task_id": "task-20251227-202801",
-  "user_request": "Add source metadata to artifacts and events for authority/credibility reasoning - document_date, source_type, document_status, author_title, distribution_scope",
-  "status": "planning",
-  "created_at": "2025-12-27T18:28:01Z",
-  "iterations": 0,
-  "confidence": 0
+  "task_id": "task-20251228-155605",
+  "user_request": "V4: Enhanced hybrid_search with graph-backed context expansion and quality-first entity resolution",
+  "status": "uat",
+  "created_at": "2025-12-28T13:56:05Z",
+  "iterations": 1,
+  "confidence": 85,
+  "spec_file": "v4.md",
+  "phases_completed": [
+    "planning",
+    "architecture", 
+    "implementation",
+    "testing",
+    "security",
+    "deployment",
+    "review"
+  ],
+  "blocking_issues": [
+    {
+      "id": "C-01",
+      "severity": "critical",
+      "title": "Cypher Query Injection",
+      "location": "graph_service.py:231-265",
+      "status": "requires_fix_before_production"
+    }
+  ]
 }
