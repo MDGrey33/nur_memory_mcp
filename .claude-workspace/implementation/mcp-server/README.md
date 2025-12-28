@@ -54,6 +54,16 @@ docker compose up -d
 
 **Important**: Include the trailing slash in the URL!
 
+## Client Compatibility Notes (Claude Desktop / Cursor)
+
+This MCP server uses **Streamable HTTP** (long-lived **SSE**).
+
+- **Canonical URL**: configure clients with the trailing slash: `.../mcp/`
+- **Clients may still use `/mcp`**: some clients will send requests to `/mcp` (no trailing slash) even if configured with `/mcp/`.
+  - The server supports this by issuing a **relative** redirect: `Location: /mcp/` (HTTP 307) and then serving MCP on `/mcp/`.
+- **Behind proxies (ngrok, reverse proxy)**: redirects must preserve HTTPS.
+  - The server honors forwarded headers so `/mcp` never redirects to `http://...` when accessed via `https://...`.
+
 ### 3. Restart Claude and test
 
 Ask Claude:

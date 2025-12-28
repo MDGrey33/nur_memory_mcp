@@ -111,6 +111,16 @@ Edit `~/.cursor/mcp.json`:
 
 > **Note**: Claude Desktop requires HTTPS. Use ngrok to expose your local server.
 
+## MCP Transport Semantics (Read This Before Wiring Clients)
+
+This server uses **Streamable HTTP** (long-lived **SSE** under the hood).
+
+- **Use the canonical endpoint**: always configure clients with a trailing slash: `.../mcp/`
+- **Clients may call `/mcp` anyway**: some clients (including Claude connector validation) will send requests to `/mcp` (no trailing slash). The server must support this and route the client to `/mcp/` safely.
+- **Redirects must preserve HTTPS**: when exposed behind a proxy (e.g., ngrok), any redirect from `/mcp` must not downgrade to `http://...`. The server should either:
+  - handle `/mcp` directly, or
+  - issue a **relative** redirect (`Location: /mcp/`) and honor forwarded proto/host headers.
+
 ## Testing
 
 ### Automated Tests

@@ -27,7 +27,9 @@ from typing import Optional, List
 import uvicorn
 from starlette.applications import Starlette
 from starlette.routing import Route, Mount
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, RedirectResponse
+from starlette.middleware import Middleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from dotenv import load_dotenv
 
 from mcp.server.fastmcp import FastMCP
@@ -1478,6 +1480,19 @@ async def health(request):
 
     return JSONResponse(health_data)
 
+async def mcp_slash_redirect(request):
+    """
+    Handle /mcp without trailing slash.
+
+    Some MCP clients (notably Claude Desktop / Claude connector validation) POST to
+    `/mcp` even when configured with `/mcp/`. Starlette's Mount-based slash redirect
+    can emit an absolute Location with an `http://` scheme when running behind
+    proxies (e.g., ngrok) unless proxy headers are honored.
+
+    We redirect *relatively* to `/mcp/` so the client keeps the original scheme/host.
+    """
+    return RedirectResponse(url="/mcp/", status_code=307)
+
 
 class MCPHandler:
     """ASGI handler for MCP requests."""
@@ -1493,9 +1508,16 @@ class MCPHandler:
 # Create Starlette app with MCP mounted
 app = Starlette(
     debug=os.getenv("LOG_LEVEL") == "DEBUG",
+    middleware=[
+        # Honor X-Forwarded-Proto/Host from reverse proxies (e.g., ngrok) so any
+        # generated URLs preserve https instead of downgrading to http.
+        Middleware(ProxyHeadersMiddleware, trusted_hosts="*"),
+    ],
     routes=[
         Route("/", health),
         Route("/health", health),
+        # Avoid proxy-induced https->http redirects by handling /mcp explicitly
+        Route("/mcp", mcp_slash_redirect, methods=["GET", "POST", "DELETE", "OPTIONS"]),
         Mount("/mcp", app=MCPHandler()),
     ],
     lifespan=lifespan,

@@ -32,6 +32,29 @@ docker compose -f docker-compose.v3.yml exec mcp-server \
 
 ---
 
+## MCP Client Configuration Semantics (Do This Exactly)
+
+This server speaks MCP over **Streamable HTTP** (implemented as a long-lived **SSE** stream).
+
+- **Local (Cursor, dev tools)**:
+  - Use: `http://localhost:3001/mcp/`
+  - Keep the trailing slash.
+- **Claude Desktop / Claude Connectors**:
+  - Claude requires **HTTPS**. Use ngrok (or another HTTPS proxy) and configure:
+    - `https://<your-domain>/mcp/`
+  - Keep the trailing slash.
+
+### `/mcp` vs `/mcp/`
+
+Even if a client is configured with `/mcp/`, some clients may still send requests to `/mcp` (no trailing slash).
+This deployment supports that by redirecting **relatively**:
+
+- `POST /mcp` → `307 Location: /mcp/`
+
+This avoids accidental `https → http` downgrades when running behind proxies.
+
+---
+
 ## What's Included
 
 ### V3 Deployment Files
