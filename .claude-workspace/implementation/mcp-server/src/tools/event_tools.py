@@ -10,9 +10,33 @@ Provides 5 new tools:
 """
 
 import logging
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 from uuid import UUID
 import re
+
+
+def parse_iso8601(date_str: Optional[str]) -> Optional[datetime]:
+    """
+    Parse ISO8601 datetime string to Python datetime for asyncpg.
+
+    Handles formats like:
+    - 2024-01-01T00:00:00Z
+    - 2024-01-01T00:00:00+00:00
+    - 2024-01-01
+    """
+    if not date_str:
+        return None
+    try:
+        # Handle 'Z' suffix for UTC
+        normalized = date_str.replace("Z", "+00:00")
+        return datetime.fromisoformat(normalized)
+    except ValueError:
+        # Try date-only format
+        try:
+            return datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            return None
 
 logger = logging.getLogger("event_tools")
 
@@ -72,15 +96,13 @@ async def event_search(
             }
 
         # Build query - join with artifact_revision for source metadata
+        # Note: Only reference columns that exist in artifact_revision schema
         query_parts = ["""
             SELECT e.*,
-                   ar.title as source_title,
-                   ar.document_date as source_document_date,
-                   ar.source_type as source_source_type,
-                   ar.document_status as source_document_status,
-                   ar.author_title as source_author_title,
-                   ar.distribution_scope as source_distribution_scope,
+                   ar.artifact_type as source_artifact_type,
                    ar.source_system as source_source_system,
+                   ar.source_id as source_source_id,
+                   ar.source_ts as source_ts,
                    ar.ingested_at as source_ingested_at
             FROM semantic_event e
             LEFT JOIN artifact_revision ar ON e.artifact_uid = ar.artifact_uid AND e.revision_id = ar.revision_id
@@ -98,16 +120,20 @@ async def event_search(
             filters_applied["category"] = category
 
         if time_from:
-            query_parts.append(f"AND e.event_time >= ${param_idx}")
-            params.append(time_from)
-            param_idx += 1
-            filters_applied["time_from"] = time_from
+            parsed_time_from = parse_iso8601(time_from)
+            if parsed_time_from:
+                query_parts.append(f"AND e.event_time >= ${param_idx}")
+                params.append(parsed_time_from)
+                param_idx += 1
+                filters_applied["time_from"] = time_from
 
         if time_to:
-            query_parts.append(f"AND e.event_time <= ${param_idx}")
-            params.append(time_to)
-            param_idx += 1
-            filters_applied["time_to"] = time_to
+            parsed_time_to = parse_iso8601(time_to)
+            if parsed_time_to:
+                query_parts.append(f"AND e.event_time <= ${param_idx}")
+                params.append(parsed_time_to)
+                param_idx += 1
+                filters_applied["time_to"] = time_to
 
         if artifact_uid:
             query_parts.append(f"AND e.artifact_uid = ${param_idx}")
@@ -143,15 +169,13 @@ async def event_search(
                     or_query = " OR ".join(tokens)
 
                     # Rebuild query using websearch_to_tsquery for safer parsing.
+                    # Note: Only reference columns that exist in artifact_revision schema
                     query_parts_or = ["""
                         SELECT e.*,
-                               ar.title as source_title,
-                               ar.document_date as source_document_date,
-                               ar.source_type as source_source_type,
-                               ar.document_status as source_document_status,
-                               ar.author_title as source_author_title,
-                               ar.distribution_scope as source_distribution_scope,
+                               ar.artifact_type as source_artifact_type,
                                ar.source_system as source_source_system,
+                               ar.source_id as source_source_id,
+                               ar.source_ts as source_ts,
                                ar.ingested_at as source_ingested_at
                         FROM semantic_event e
                         LEFT JOIN artifact_revision ar ON e.artifact_uid = ar.artifact_uid AND e.revision_id = ar.revision_id
@@ -166,13 +190,17 @@ async def event_search(
                         params_or.append(category)
                         param_idx_or += 1
                     if time_from:
-                        query_parts_or.append(f"AND e.event_time >= ${param_idx_or}")
-                        params_or.append(time_from)
-                        param_idx_or += 1
+                        parsed_time_from = parse_iso8601(time_from)
+                        if parsed_time_from:
+                            query_parts_or.append(f"AND e.event_time >= ${param_idx_or}")
+                            params_or.append(parsed_time_from)
+                            param_idx_or += 1
                     if time_to:
-                        query_parts_or.append(f"AND e.event_time <= ${param_idx_or}")
-                        params_or.append(time_to)
-                        param_idx_or += 1
+                        parsed_time_to = parse_iso8601(time_to)
+                        if parsed_time_to:
+                            query_parts_or.append(f"AND e.event_time <= ${param_idx_or}")
+                            params_or.append(parsed_time_to)
+                            param_idx_or += 1
                     if artifact_uid:
                         query_parts_or.append(f"AND e.artifact_uid = ${param_idx_or}")
                         params_or.append(artifact_uid)
@@ -233,13 +261,10 @@ async def event_search(
             source_context = {
                 "artifact_uid": event["artifact_uid"],
                 "revision_id": event["revision_id"],
-                "title": event.get("source_title"),
-                "document_date": str(event["source_document_date"]) if event.get("source_document_date") else None,
-                "source_type": event.get("source_source_type"),
-                "document_status": event.get("source_document_status"),
-                "author_title": event.get("source_author_title"),
-                "distribution_scope": event.get("source_distribution_scope"),
+                "artifact_type": event.get("source_artifact_type"),
                 "source_system": event.get("source_source_system"),
+                "source_id": event.get("source_source_id"),
+                "source_ts": event["source_ts"].isoformat() if event.get("source_ts") else None,
                 "ingested_at": event["source_ingested_at"].isoformat() if event.get("source_ingested_at") else None
             }
 
@@ -286,15 +311,13 @@ async def event_get(
     """
     try:
         # Fetch event with source metadata
+        # Note: Only reference columns that exist in artifact_revision schema
         event_sql = """
             SELECT e.*,
-                   ar.title as source_title,
-                   ar.document_date as source_document_date,
-                   ar.source_type as source_source_type,
-                   ar.document_status as source_document_status,
-                   ar.author_title as source_author_title,
-                   ar.distribution_scope as source_distribution_scope,
+                   ar.artifact_type as source_artifact_type,
                    ar.source_system as source_source_system,
+                   ar.source_id as source_source_id,
+                   ar.source_ts as source_ts,
                    ar.ingested_at as source_ingested_at
             FROM semantic_event e
             LEFT JOIN artifact_revision ar ON e.artifact_uid = ar.artifact_uid AND e.revision_id = ar.revision_id
@@ -341,13 +364,10 @@ async def event_get(
         source_context = {
             "artifact_uid": event["artifact_uid"],
             "revision_id": event["revision_id"],
-            "title": event.get("source_title"),
-            "document_date": str(event["source_document_date"]) if event.get("source_document_date") else None,
-            "source_type": event.get("source_source_type"),
-            "document_status": event.get("source_document_status"),
-            "author_title": event.get("source_author_title"),
-            "distribution_scope": event.get("source_distribution_scope"),
+            "artifact_type": event.get("source_artifact_type"),
             "source_system": event.get("source_source_system"),
+            "source_id": event.get("source_source_id"),
+            "source_ts": event["source_ts"].isoformat() if event.get("source_ts") else None,
             "ingested_at": event["source_ingested_at"].isoformat() if event.get("source_ingested_at") else None
         }
 

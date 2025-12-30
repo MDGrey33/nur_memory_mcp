@@ -643,9 +643,8 @@ async def artifact_ingest(
                                 ),
                                 (
                                     """INSERT INTO artifact_revision
-                                       (artifact_uid, revision_id, artifact_id, artifact_type, source_system, source_id, content_hash, token_count, is_chunked, chunk_count, title,
-                                        document_date, source_type, document_status, author_title, distribution_scope)
-                                       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                                       (artifact_uid, revision_id, artifact_id, artifact_type, source_system, source_id, content_hash, token_count, is_chunked, chunk_count)
+                                       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                                        ON CONFLICT (artifact_uid, revision_id) DO NOTHING""",
                                     (
                                         artifact_uid,
@@ -658,12 +657,6 @@ async def artifact_ingest(
                                         token_count,
                                         is_chunked,
                                         chunk_count,
-                                        title_val,
-                                        parse_date_string(document_date or existing_meta.get("document_date") or ""),
-                                        _norm_enum(source_type or existing_meta.get("source_type")),
-                                        _norm_enum(document_status or existing_meta.get("document_status")),
-                                        author_title or existing_meta.get("author_title") or "",
-                                        _norm_enum(distribution_scope or existing_meta.get("distribution_scope")),
                                     )
                                 )
                             ])
@@ -767,12 +760,10 @@ async def artifact_ingest(
                         # Insert new revision (include artifact_id for worker to fetch from ChromaDB)
                         (
                             """INSERT INTO artifact_revision
-                               (artifact_uid, revision_id, artifact_id, artifact_type, source_system, source_id, content_hash, token_count, is_chunked, chunk_count, title,
-                                document_date, source_type, document_status, author_title, distribution_scope)
-                               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                               (artifact_uid, revision_id, artifact_id, artifact_type, source_system, source_id, content_hash, token_count, is_chunked, chunk_count)
+                               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                                ON CONFLICT (artifact_uid, revision_id) DO NOTHING""",
-                            (artifact_uid, revision_id, artifact_id, artifact_type, source_system, source_id or "", content_hash, token_count, False, 0, title or "",
-                             parse_date_string(document_date), source_type, document_status, author_title, distribution_scope)
+                            (artifact_uid, revision_id, artifact_id, artifact_type, source_system, source_id or "", content_hash, token_count, False, 0)
                         )
                     ])
 
@@ -878,12 +869,10 @@ async def artifact_ingest(
                         # Insert new revision
                         (
                             """INSERT INTO artifact_revision
-                               (artifact_uid, revision_id, artifact_id, artifact_type, source_system, source_id, content_hash, token_count, is_chunked, chunk_count, title,
-                                document_date, source_type, document_status, author_title, distribution_scope)
-                               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                               (artifact_uid, revision_id, artifact_id, artifact_type, source_system, source_id, content_hash, token_count, is_chunked, chunk_count)
+                               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                                ON CONFLICT (artifact_uid, revision_id) DO NOTHING""",
-                            (artifact_uid, revision_id, artifact_id, artifact_type, source_system, source_id or "", content_hash, token_count, True, len(chunks), title or "",
-                             parse_date_string(document_date), source_type, document_status, author_title, distribution_scope)
+                            (artifact_uid, revision_id, artifact_id, artifact_type, source_system, source_id or "", content_hash, token_count, True, len(chunks))
                         )
                     ])
 
