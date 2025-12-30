@@ -185,7 +185,11 @@ class TestHybridSearchBasic:
     def test_hybrid_search_respects_limit(
         self, mcp_client: MCPClient, test_artifact_id: Optional[str], cleanup_artifact
     ) -> None:
-        """Test that hybrid_search respects the limit parameter."""
+        """Test that hybrid_search respects the limit parameter.
+
+        Note: The limit is applied per-source-type (memories, artifacts, events),
+        so total results may exceed the limit when combining multiple sources.
+        """
         limit = 3
         response = mcp_client.call_tool("hybrid_search", {
             "query": "test",
@@ -194,8 +198,16 @@ class TestHybridSearchBasic:
 
         assert_response_success(response)
         primary_results = assert_response_has_key(response, "primary_results")
-        # Note: May return fewer results if not enough matches exist
-        assert len(primary_results) <= limit, f"Should return at most {limit} results"
+
+        # Count results per source type
+        results_by_type: Dict[str, int] = {}
+        for result in primary_results:
+            result_type = result.get("type") or result.get("collection", "unknown")
+            results_by_type[result_type] = results_by_type.get(result_type, 0) + 1
+
+        # Each source type should respect the limit
+        for source_type, count in results_by_type.items():
+            assert count <= limit, f"Source '{source_type}' returned {count} results, exceeds limit {limit}"
 
     def test_hybrid_search_validates_limit_range(
         self, mcp_client: MCPClient

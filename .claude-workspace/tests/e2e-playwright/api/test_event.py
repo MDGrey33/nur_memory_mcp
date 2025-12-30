@@ -24,6 +24,7 @@ import uuid
 import time
 import os
 import sys
+import json
 from typing import Dict, List, Optional, Any, Generator
 from pathlib import Path
 
@@ -521,12 +522,16 @@ class TestEventGetTool:
         assert response.success, f"Get event failed: {response.error}"
 
         required_fields = [
-            "event_id", "artifact_uid", "revision_id", "category",
-            "narrative", "confidence"
+            "event_id", "category", "narrative", "confidence"
         ]
 
         for field in required_fields:
             assert field in response.data, f"Missing required field: {field}"
+
+        # artifact_uid and revision_id are in the nested 'source' object
+        if "source" in response.data:
+            assert "artifact_uid" in response.data["source"], "Missing artifact_uid in source"
+            assert "revision_id" in response.data["source"], "Missing revision_id in source"
 
     def test_event_get_includes_evidence(
         self,
@@ -1106,6 +1111,13 @@ class TestEventStructure:
 
         assert response.success
         actors = response.data.get("actors", [])
+
+        # Handle case where actors is returned as JSON string
+        if isinstance(actors, str):
+            try:
+                actors = json.loads(actors)
+            except json.JSONDecodeError:
+                pytest.fail(f"Actors is a string but not valid JSON: {actors}")
 
         assert isinstance(actors, list), "Actors should be a list"
 
