@@ -1,8 +1,14 @@
 """
-MCP Memory Server v3.0 - Streamable HTTP Transport
+MCP Memory Server v4.0 - Streamable HTTP Transport
 
 A Model Context Protocol server that provides persistent memory and artifact storage
-with OpenAI embeddings, token-window chunking, hybrid retrieval, and semantic event extraction.
+with OpenAI embeddings, token-window chunking, hybrid retrieval, semantic event extraction,
+and graph-backed context expansion.
+
+V4 Features:
+- Graph-backed context expansion (Apache AGE)
+- Entity resolution with deduplication
+- 1-hop graph traversal for related context
 
 V3 Features:
 - Semantic event extraction from artifacts using LLM
@@ -15,6 +21,9 @@ Usage:
 
 Configuration via .env file (see .env.example)
 """
+
+# Version and build info
+__version__ = "4.0.0"
 
 import os
 import logging
@@ -137,7 +146,7 @@ HYBRID_SEARCH_EXPAND_OPTIONS = [
 ]
 
 # Create FastMCP server
-mcp = FastMCP("MCP Memory v3.0")
+mcp = FastMCP(f"MCP Memory v{__version__}")
 
 # Global services (initialized in lifespan)
 config = None
@@ -1540,7 +1549,7 @@ async def lifespan(app):
     global graph_service  # V4
 
     logger.info("=" * 60)
-    logger.info("Starting MCP Memory Server v3.0")
+    logger.info(f"Starting MCP Memory Server v{__version__}")
     logger.info("=" * 60)
 
     try:
@@ -1656,7 +1665,7 @@ async def lifespan(app):
         # Run session manager
         async with session_manager.run():
             logger.info("=" * 60)
-            logger.info(f"MCP Memory Server v3.0 ready at http://0.0.0.0:{config.mcp_port}/mcp/")
+            logger.info(f"MCP Memory Server v{__version__} ready at http://0.0.0.0:{config.mcp_port}/mcp/")
             logger.info("=" * 60)
             yield
 
@@ -1664,7 +1673,7 @@ async def lifespan(app):
         logger.error(f"Failed to start server: {e}", exc_info=True)
         raise
 
-    logger.info("MCP Memory Server v3.0 stopped")
+    logger.info(f"MCP Memory Server v{__version__} stopped")
 
 
 async def health(request):
@@ -1672,7 +1681,8 @@ async def health(request):
     health_data = {
         "status": "ok",
         "service": "mcp-memory",
-        "version": "3.0.0"
+        "version": __version__,
+        "environment": os.getenv("ENVIRONMENT", "prod")
     }
 
     # Add detailed checks if services initialized
@@ -1688,6 +1698,18 @@ async def health(request):
         health_data["v3_enabled"] = True
     else:
         health_data["v3_enabled"] = False
+
+    # V4: Add graph health
+    if graph_service:
+        try:
+            graph_health = await graph_service.get_health()
+            health_data["graph"] = graph_health
+            health_data["v4_enabled"] = True
+        except Exception as e:
+            health_data["graph"] = {"status": "error", "error": str(e)}
+            health_data["v4_enabled"] = False
+    else:
+        health_data["v4_enabled"] = os.getenv("V4_GRAPH_ENABLED", "false").lower() == "true"
 
     return JSONResponse(health_data)
 
@@ -1750,7 +1772,7 @@ if __name__ == "__main__":
         logger.error(f"Failed to load config: {e}")
         port = 3000
 
-    logger.info(f"Starting MCP Memory Server v3.0 on port {port}")
+    logger.info(f"Starting MCP Memory Server v{__version__} on port {port}")
 
     uvicorn.run(
         app,
