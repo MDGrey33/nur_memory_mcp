@@ -316,6 +316,27 @@ mem_narrative       (new - "story")
 
 ---
 
+## Testing & Operations (V4)
+
+V4 includes comprehensive testing infrastructure with environment isolation.
+See [V4 ADR-005: Testing Infrastructure](./v4/adr/ADR-005-testing-infrastructure.md).
+
+**Quick Reference:**
+
+| Environment | MCP Port | Purpose |
+|-------------|----------|---------|
+| prod | 3001 | Production |
+| staging | 3101 | Pre-release |
+| test | 3201 | CI/CD |
+
+**Scripts:** `.claude-workspace/deployment/scripts/`
+- `env-up.sh` / `env-down.sh` - Start/stop environments
+- `health-check.sh` - Verify service health (supports `--wait`, `--json`)
+
+**CI:** `.github/workflows/test.yml` - GitHub Actions pipeline
+
+---
+
 ## Reference Materials
 
 ### External Documentation
@@ -327,6 +348,7 @@ mem_narrative       (new - "story")
 ### Internal Documentation
 - Original spec: `/chroma_mcp_memory_v1.md`
 - Detailed spec: `/.claude-workspace/specs/v1-specification.md`
+- V4 architecture: `./v4/architecture-overview.md`
 - This architecture directory
 
 ---

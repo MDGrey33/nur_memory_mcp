@@ -1,11 +1,12 @@
 {
   "mcpServers": {
     "playwright": {
-      "description": "Browser automation capabilities using Playwright for UI testing, visual regression, and accessibility scanning. Enables LLMs to interact with web pages through structured accessibility snapshots.",
+      "type": "stdio",
       "command": "npx",
       "args": ["-y", "@playwright/mcp@latest"]
     },
     "memory": {
+      "type": "http",
       "url": "http://localhost:3001/mcp/"
     }
   }

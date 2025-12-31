@@ -373,7 +373,93 @@ If issues arise:
 
 ---
 
-## 11. Related Documents
+## 11. Testing & Operations
+
+### Environment Strategy
+
+V4 uses port-isolated environments for concurrent development and testing:
+
+| Environment | MCP | ChromaDB | PostgreSQL | Purpose |
+|-------------|-----|----------|------------|---------|
+| **prod** | 3001 | 8001 | 5432 | Production |
+| **staging** | 3101 | 8101 | 5532 | Pre-release validation |
+| **test** | 3201 | 8201 | 5632 | CI/CD and local testing |
+
+### CI/CD Pipeline
+
+GitHub Actions workflow (`.github/workflows/test.yml`):
+
+```
+Push/PR
+   │
+   ▼
+┌─────────────┐
+│ API Tests   │  ← 15min, service containers
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│ Browser     │  ← 10min, Docker Compose
+│ Tests       │
+└──────┬──────┘
+       │
+       ▼ (main only)
+┌─────────────┐
+│ Quality     │  ← 20min, AI assessment
+│ Tests       │
+└─────────────┘
+```
+
+### Environment Management
+
+Scripts in `.claude-workspace/deployment/scripts/`:
+
+```bash
+# Start test environment
+./scripts/env-up.sh test
+
+# Check health
+./scripts/health-check.sh test
+
+# Check with wait mode
+./scripts/health-check.sh test --wait
+
+# Reset (clears data, blocks prod)
+./scripts/env-reset.sh test
+
+# Stop
+./scripts/env-down.sh test --volumes
+```
+
+### Health Checks
+
+| Service | Endpoint | Success |
+|---------|----------|---------|
+| MCP Server | `/health` | HTTP 200 |
+| ChromaDB | `/api/v2/heartbeat` | HTTP 200 |
+| PostgreSQL | `pg_isready` | Exit 0 |
+
+### Client Configuration
+
+**Claude Code** (`.mcp.json`):
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "type": "http",
+      "url": "http://localhost:3001/mcp/"
+    }
+  }
+}
+```
+
+> **Note:** Claude Code requires the `type` field. Use `"http"` not `"url"`.
+
+See [ADR-005: Testing Infrastructure](adr/ADR-005-testing-infrastructure.md) for full details.
+
+---
+
+## 12. Related Documents
 
 ### Architecture Decision Records
 
@@ -383,6 +469,7 @@ If issues arise:
 | ADR-002 | Graph Database Choice | `adr/ADR-002-graph-database-choice.md` |
 | ADR-003 | Entity Resolution Timing | `adr/ADR-003-entity-resolution-timing.md` |
 | ADR-004 | Graph Model Simplification | `adr/ADR-004-graph-model-simplification.md` |
+| ADR-005 | Testing Infrastructure | `adr/ADR-005-testing-infrastructure.md` |
 
 ### Diagrams
 

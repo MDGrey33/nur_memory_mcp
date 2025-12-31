@@ -72,14 +72,14 @@ python src/server.py
 python -m src.worker
 ```
 
-Server runs at: `http://localhost:3000/mcp/`
+Server runs at: `http://localhost:3001/mcp/`
 
 ### HTTPS Access (via ngrok)
 
 For Claude AI web access, use ngrok:
 
 ```bash
-ngrok http 3000
+ngrok http 3001
 ```
 
 This provides an HTTPS URL like: `https://xxxx.ngrok-free.app/mcp/`
@@ -94,7 +94,7 @@ Edit `~/.cursor/mcp.json`:
 {
   "mcpServers": {
     "memory": {
-      "url": "http://localhost:3000/mcp/"
+      "url": "http://localhost:3001/mcp/"
     }
   }
 }
@@ -102,7 +102,7 @@ Edit `~/.cursor/mcp.json`:
 
 ### Claude Desktop / Claude.ai
 
-1. Start ngrok: `ngrok http 3000`
+1. Start ngrok: `ngrok http 3001`
 2. Open **Claude Desktop** or **Claude.ai** (web)
 3. Go to **Settings** → **Connectors**
 4. Click **Add Custom Connector**
@@ -111,6 +111,56 @@ Edit `~/.cursor/mcp.json`:
    - **URL**: `https://your-ngrok-url.ngrok-free.app/mcp/`
 
 > **Note**: Claude Desktop and Claude.ai require HTTPS. Use ngrok to expose your local server.
+
+### Claude Code (CLI)
+
+Create or edit `.mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "type": "http",
+      "url": "http://localhost:3001/mcp/"
+    }
+  }
+}
+```
+
+**Important schema requirements** (Claude Code is stricter than other clients):
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| `type` | Yes | Must be `"http"` (not `"url"`) |
+| `url` | Yes | Include trailing slash |
+
+**Common errors:**
+- `"Does not adhere to MCP server configuration schema"` - Missing `type` field or using invalid type like `"url"`
+- Adding unsupported fields like `"description"` will cause validation errors
+
+**Verify configuration:**
+```bash
+claude /doctor
+```
+
+**Multiple servers example:**
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "type": "http",
+      "url": "http://localhost:3001/mcp/"
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"]
+    }
+  }
+}
+```
+
+> **Note**: Claude Code works with `http://localhost` - no HTTPS required for local development.
 
 ## MCP Transport Semantics (Read This Before Wiring Clients)
 
@@ -141,7 +191,7 @@ python test_samples.py all
 ### Health Check
 
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:3001/health
 ```
 
 ## Graph Visualization (V4: Apache AGE → Neo4j Browser)
@@ -374,7 +424,7 @@ docker rm -f neo4j-local
 ### Core
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MCP_PORT` | 3000 | Server port |
+| `MCP_PORT` | 3000 | Internal server port (Docker maps to 3001 externally) |
 | `OPENAI_API_KEY` | (required) | OpenAI API key |
 | `LOG_LEVEL` | INFO | Logging level |
 
