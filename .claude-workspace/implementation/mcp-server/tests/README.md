@@ -1,6 +1,15 @@
-# MCP Memory Server v2.0 - Test Suite
+# MCP Memory Server V6.2 - Test Suite
 
-Comprehensive test suite targeting >80% code coverage for the MCP Memory Server v2.0.
+Comprehensive test suite targeting >80% code coverage for the MCP Memory Server V6.2.
+
+## V6 Tools (4 total)
+
+| Tool | Description |
+|------|-------------|
+| `remember` | Store content with automatic chunking and event extraction |
+| `recall` | Search/retrieve with semantic search and graph expansion |
+| `forget` | Delete with cascade (chunks, events, entities) |
+| `status` | Health check and job status |
 
 ## Test Structure
 

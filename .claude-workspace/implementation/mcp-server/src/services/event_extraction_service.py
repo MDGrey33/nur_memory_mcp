@@ -47,15 +47,17 @@ Your task is to identify and extract key events AND entities from the provided t
 
 ## EVENTS
 
-Focus on these event types:
-1. **Commitments**: Promises, deadlines, deliverables (e.g., "Alice will deliver MVP by Q1")
-2. **Executions**: Actions taken, completions (e.g., "Deployed v2.3 to production")
-3. **Decisions**: Choices made, directions set (e.g., "Decided to use Postgres over Kafka")
-4. **Collaborations**: Meetings, discussions, handoffs (e.g., "Engineering and design synced on UI")
+Focus on these event types (use EXACTLY these category names in your output):
+1. **Commitment**: Promises, deadlines, deliverables (e.g., "Alice will deliver MVP by Q1")
+2. **Execution**: Actions taken, completions (e.g., "Deployed v2.3 to production")
+3. **Decision**: Choices made, directions set (e.g., "Decided to use Postgres over Kafka")
+4. **Collaboration**: Meetings, discussions, handoffs (e.g., "Engineering and design synced on UI")
 5. **QualityRisk**: Issues, blockers, concerns (e.g., "Security audit found XSS vulnerability")
 6. **Feedback**: User input, reviews, critiques (e.g., "Users reported login flow is confusing")
 7. **Change**: Modifications, pivots, updates (e.g., "Changed pricing from $99 to $149")
 8. **Stakeholder**: Who's involved, roles, responsibilities (e.g., "Added Bob as security reviewer")
+
+IMPORTANT: The category field MUST be one of these exact singular values: Commitment, Execution, Decision, Collaboration, QualityRisk, Feedback, Change, Stakeholder. Do NOT use plural forms.
 
 For each event, extract:
 - **category**: One of the 8 categories above

@@ -1,8 +1,69 @@
-# Chroma MCP Memory V1 - Implementation Summary
+# MCP Memory Implementation Summary
+
+> **Current Version**: V6.2 (2026-01-01)
+>
+> This document has historical V1 information. For current status see:
+> - **V6 Tools**: `remember`, `recall`, `forget`, `status`
+> - **Testing**: [TEST_SUMMARY.md](../tests/TEST_SUMMARY.md)
+> - **Benchmarks**: [benchmarks/README.md](../benchmarks/README.md)
+> - **Deployment**: [deployment/README.md](../deployment/README.md)
+
+---
+
+## Version History
+
+| Version | Date | Key Changes |
+|---------|------|-------------|
+| V6.2 | 2026-01-01 | Documentation cleanup, V7 benchmarks |
+| V6.1 | 2025-12-30 | Consolidated to 4 tools |
+| V6.0 | 2025-12-29 | Removed AGE, SQL graph expansion |
+| V5.0 | 2025-12-28 | Entity resolution, graph features |
+| V4.0 | 2025-12-27 | Event extraction, semantic events |
+| V3.0 | 2025-12-26 | PostgreSQL integration, hybrid search |
+| V2.0 | 2025-12-25 | Chunking, multi-collection |
+| V1.0 | 2025-12-25 | Initial implementation |
+
+---
+
+## Current Architecture (V6)
+
+### Tools
+| Tool | Purpose |
+|------|---------|
+| `remember` | Store content with auto-chunking and event extraction |
+| `recall` | Search with graph expansion via SQL joins |
+| `forget` | Cascade delete content → chunks → events → entities |
+| `status` | Health check and statistics |
+
+### Services
+- **MCP Server**: FastAPI on port 3001
+- **PostgreSQL**: Events, jobs, entities
+- **ChromaDB**: Vector storage (content, chunks)
+- **Event Worker**: Async extraction processing
+
+### Testing (244 tests)
+- Core Unit: 90 tests
+- Core Integration: 26 tests
+- V6 Unit: 19 tests
+- V6 Integration: 61 tests
+- V6 E2E: 11 tests
+- V7 Benchmark Metrics: 37 tests
+
+### Benchmarks (V7)
+- 12 labeled documents
+- 63 ground truth events
+- 15 benchmark queries
+- Complete fixtures for replay mode
+- Strict mode (fails on missing fixtures)
+- Two-tier strategy (replay/live)
+
+---
+
+# Historical: V1 Implementation Details
 
 **Date:** 2025-12-25
 **Lead Backend Engineer:** Claude (Autonomous Development Team)
-**Status:** Implementation Complete
+**Status:** ✅ Superseded by V6
 
 ---
 

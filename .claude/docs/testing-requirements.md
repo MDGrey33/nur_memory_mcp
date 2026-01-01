@@ -1,59 +1,45 @@
-# Mandatory Testing Requirements
+# Mandatory Testing Requirements (V6.2)
 
 ## Problem Statement
 
 Unit tests with mocks pass but real-world integration fails. This document defines **mandatory real-world testing** that must pass before UAT.
 
+## V6 Tools (4 total)
+
+| Tool | Description |
+|------|-------------|
+| `remember` | Store content with automatic chunking and event extraction |
+| `recall` | Search/retrieve with semantic search and graph expansion |
+| `forget` | Delete with cascade (chunks, events, entities) |
+| `status` | Health check and job status |
+
+## Port Configuration
+
+| Environment | Port | Compose File |
+|-------------|------|--------------|
+| Default/Prod | 3000 | `docker-compose.yml` |
+| Local Dev | 3001 | `docker-compose.local.yml` |
+| Test | 3201 | `docker-compose.test.yml` |
+
+---
+
 ## The User Simulation Tests (REQUIRED)
 
-### Test 1: HTTP Client Simulation
-**Location**: `.claude-workspace/tests/e2e/full_user_simulation.py`
+### Test: MCP Flow Test
+**Location**: `.claude-workspace/implementation/mcp-server/test_mcp_flow.py`
 
 This script simulates exactly what a real user would do:
-1. Connects to MCP server (like Cursor/Claude Desktop)
-2. Calls EVERY tool with real data
+1. Connects to MCP server
+2. Calls ALL V6 tools (remember, recall, forget, status)
 3. Verifies data persists and retrieves correctly
-4. Tests complete user workflows
 
 **Run Before Every UAT**:
 ```bash
-python3 .claude-workspace/tests/e2e/full_user_simulation.py
+cd .claude-workspace/implementation/mcp-server
+MCP_URL="http://localhost:3001/mcp/" python test_mcp_flow.py
 ```
 
-**Must show**: `ALL TESTS PASSED - Ready for user`
-
-### Test 2: Browser UI Automation (MCP Inspector)
-**Location**: `.claude-workspace/tests/e2e/browser_mcp_test.js`
-
-This script automates the MCP Inspector browser UI to validate the visual user experience:
-1. Launches MCP Inspector at localhost:6274
-2. Configures Streamable HTTP transport
-3. Connects to server and verifies connection status
-4. Navigates to Tools tab and lists all tools
-5. Selects and executes a tool (memory_store)
-6. Verifies successful response
-7. Takes screenshots as evidence
-
-**Prerequisites**:
-```bash
-# Install Playwright (one-time setup)
-cd .claude-workspace/tests/e2e
-npm install playwright
-npx playwright install chromium
-
-# Start MCP Inspector
-npx @modelcontextprotocol/inspector node /path/to/server.js
-```
-
-**Run Before Every UAT**:
-```bash
-cd .claude-workspace/tests/e2e
-MCP_AUTH_TOKEN="<token_from_inspector>" node browser_mcp_test.js
-```
-
-**Must show**: `Passed: 11` and `Failed: 0`
-
-**Screenshots saved to**: `.claude-workspace/tests/e2e/screenshots/`
+**Must show**: `ALL TESTS PASSED - MCP Server v6.2 is working!`
 
 ### Failure Policy
 **If ANY test fails**: Fix the bug. Do NOT present to user.
@@ -68,7 +54,7 @@ Before presenting to user, the following MUST be verified against **running serv
 ```bash
 # These commands MUST succeed before UAT
 curl http://localhost:3001/health    # MCP Server
-curl http://localhost:8001/api/v2/heartbeat  # ChromaDB (actual port)
+curl http://localhost:8001/api/v2/heartbeat  # ChromaDB
 ```
 
 ### Configuration Validation
@@ -80,22 +66,21 @@ curl http://localhost:8001/api/v2/heartbeat  # ChromaDB (actual port)
 
 ## Rule 2: Real MCP Client Test
 
-Before UAT, test with an actual MCP client (not curl):
+Before UAT, test with an actual MCP client:
 
 ```bash
-# Must verify ALL tools are exposed
+# Must verify ALL 4 V6 tools are exposed
 curl -s -X POST http://localhost:3001/mcp/ \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   --data '{"jsonrpc":"2.0","method":"tools/list","id":1}' | grep -c '"name"'
-# Expected: 12 tools for v2
+# Expected: 4 tools for V6
 ```
 
 ### Tool Count Verification
 | Version | Expected Tools |
 |---------|----------------|
-| v1 | 6 tools |
-| v2 | 12 tools |
+| V6.2 | 4 tools (remember, recall, forget, status) |
 
 If tool count doesn't match, **FAIL the review**.
 
@@ -103,27 +88,30 @@ If tool count doesn't match, **FAIL the review**.
 
 ## Rule 3: End-to-End Tool Execution
 
-At least ONE tool from each category must be called with real services:
+All V6 tools must be tested with real services:
 
-### Memory Tools
+### Store with remember
 ```python
-# Actually call memory_store and verify in ChromaDB
-memory_store("Test memory", "fact", 0.9)
-# Verify: Check ChromaDB collection has the record
+remember(content="Test memory", context="fact", importance=0.9)
+# Verify: Check ChromaDB content collection has the record
 ```
 
-### Artifact Tools (v2)
+### Search with recall
 ```python
-# Actually call artifact_ingest and verify chunking works
-artifact_ingest("doc", "test", "Long content...", title="Test")
-# Verify: Check artifacts and artifact_chunks collections
+recall(query="test query", limit=5)
+# Verify: Results returned with semantic matches
 ```
 
-### Search Tools
+### Check with status
 ```python
-# Actually call hybrid_search and verify results
-hybrid_search("test query")
-# Verify: Results returned with RRF scores
+status()
+# Verify: Health info and counts returned
+```
+
+### Delete with forget
+```python
+forget(id="art_xxx", confirm=True)
+# Verify: Artifact and related data deleted
 ```
 
 ---
@@ -132,16 +120,16 @@ hybrid_search("test query")
 
 Before UAT, verify the client config works:
 
+### For Claude Code
+```bash
+# Check .mcp.json has correct URL
+cat .mcp.json | grep "localhost:3001/mcp"
+```
+
 ### For Claude Desktop
 ```bash
 # Check config exists and has correct URL
 cat ~/Library/Application\ Support/Claude/claude_desktop_config.json | grep "localhost:3001/mcp"
-```
-
-### For Cursor
-```bash
-# Check config exists and has correct URL
-cat ~/.cursor/mcp.json | grep "localhost:3001/mcp"
 ```
 
 ---
@@ -152,9 +140,8 @@ cat ~/.cursor/mcp.json | grep "localhost:3001/mcp"
 
 ```bash
 # All these must show the SAME ports
-grep -r "CHROMA_PORT" .env
-grep -r "8001\|8000" docker-compose.yml
-docker ps --format '{{.Ports}}' | grep chroma
+grep -r "MCP_PORT\|MCP_EXTERNAL_PORT" .claude-workspace/deployment/.env*
+docker ps --format '{{.Ports}}' | grep -E "300[01]|8001"
 ```
 
 If ports don't match, **FAIL the review**.
@@ -173,14 +160,12 @@ The Chief of Staff MUST verify ALL items before presenting to user:
 - [ ] Server logs show no errors on startup
 
 ### Automated Tests (BLOCKING)
-- [ ] HTTP Client Simulation: `python3 .claude-workspace/tests/e2e/full_user_simulation.py` → "ALL TESTS PASSED"
-- [ ] Browser UI Automation: `node browser_mcp_test.js` → "Passed: 11, Failed: 0"
-- [ ] All expected tools are listed (12 for v2)
-- [ ] At least one tool from each category executes successfully
+- [ ] MCP Flow Test: `python test_mcp_flow.py` → "ALL TESTS PASSED"
+- [ ] All 4 V6 tools are listed (remember, recall, forget, status)
+- [ ] Each tool executes successfully
 
 ### Client Configuration
-- [ ] Cursor config (`~/.cursor/mcp.json`) has correct URL: `http://localhost:3001/mcp/`
-- [ ] Claude Desktop config has correct URL (if applicable)
+- [ ] Config has correct URL: `http://localhost:3001/mcp/`
 
 **If ANY item fails, do NOT proceed to UAT.**
 
@@ -188,14 +173,9 @@ The Chief of Staff MUST verify ALL items before presenting to user:
 
 ## Test Script Location
 
-A real E2E test script MUST exist at:
-`.claude-workspace/tests/e2e/real_service_test.py`
-
-This script:
-1. Connects to actual running services
-2. Executes real tool calls
-3. Verifies data in ChromaDB
-4. Reports pass/fail for each check
+V6 E2E test scripts:
+- `.claude-workspace/implementation/mcp-server/test_mcp_flow.py` - Full MCP flow
+- `.claude-workspace/tests/v6/e2e/` - Pytest E2E suite
 
 ---
 
@@ -203,8 +183,8 @@ This script:
 
 | Issue | How We Catch It |
 |-------|-----------------|
-| Wrong ChromaDB port | Port consistency check |
+| Wrong port (3100 vs 3001) | Port consistency check |
 | Mocked tests pass, real fails | Mandatory real service tests |
 | Tools not loading in client | Client config verification |
 | API key invalid | Real embedding test |
-| Missing tools | Tool count verification |
+| Missing tools | Tool count verification (expect 4) |

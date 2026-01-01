@@ -1,15 +1,11 @@
 """
-RRF-based hybrid retrieval service.
+V6 Retrieval Service - Hybrid search with graph expansion.
 
-V3 features:
-- Multi-collection search (artifacts, chunks, memory)
+Features:
+- Unified content/chunks collection search
 - RRF merging for rank fusion
-- Neighbor expansion for chunk context
-
-V4 features (added):
-- Graph expansion for related context
+- Graph expansion via SQL joins (no AGE dependency)
 - Entity resolution and linking
-- New output shape with related_context and entities
 """
 
 import logging
@@ -22,11 +18,6 @@ from chromadb import HttpClient
 
 from storage.models import SearchResult, MergedResult
 from storage.collections import (
-    get_memory_collection,
-    get_artifacts_collection,
-    get_artifact_chunks_collection,
-    get_chunks_by_artifact,
-    # V5 collections
     get_content_collection,
     get_chunks_collection,
     get_content_by_id,
@@ -39,18 +30,9 @@ from utils.errors import RetrievalError
 
 logger = logging.getLogger("mcp-memory.retrieval")
 
-# Default distance cutoff for Chroma results (smaller is more similar).
-# Set RETRIEVAL_MAX_DISTANCE to tune; if unset, we use a conservative default to
-# reduce noisy / irrelevant chunk hits.
-DEFAULT_MAX_DISTANCE = float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.35"))
-# For chunk hits, require a minimum number of query "anchor tokens" to appear in
-# the chunk content (reduces generic matches like "code quality" when querying for
-# specific incidents). Set to 0 to disable.
-CHUNK_MIN_ANCHOR_MATCHES = int(os.getenv("RETRIEVAL_CHUNK_MIN_ANCHOR_MATCHES", "1"))
-
 
 # ============================================================================
-# V4 Data Structures
+# V6 Data Structures
 # ============================================================================
 
 @dataclass
@@ -105,7 +87,7 @@ class EntityInfo:
 
 @dataclass
 class V4SearchResult:
-    """V4 search result with graph expansion."""
+    """V6 search result with graph expansion."""
     primary_results: List[MergedResult]
     related_context: List[RelatedContextItem] = field(default_factory=list)
     entities: List[EntityInfo] = field(default_factory=list)
@@ -139,7 +121,7 @@ class V4SearchResult:
 
 
 class RetrievalService:
-    """RRF merging and hybrid retrieval service with V4 graph expansion."""
+    """V6 retrieval service with RRF merging and SQL-based graph expansion."""
 
     def __init__(
         self,
@@ -147,8 +129,7 @@ class RetrievalService:
         chunking_service: ChunkingService,
         chroma_client: HttpClient,
         k: int = 60,
-        pg_client=None,
-        graph_service=None
+        pg_client=None
     ):
         """
         Initialize retrieval service.
@@ -158,17 +139,13 @@ class RetrievalService:
             chunking_service: Chunking service for neighbor expansion
             chroma_client: ChromaDB client
             k: RRF constant (standard value: 60)
-            pg_client: Postgres client for V4 features (optional)
-            graph_service: GraphService for V4 graph expansion (optional)
+            pg_client: Postgres client for graph expansion via SQL joins
         """
         self.embedding_service = embedding_service
         self.chunking_service = chunking_service
         self.chroma_client = chroma_client
         self.k = k
-
-        # V4 services
         self.pg_client = pg_client
-        self.graph_service = graph_service
 
     def merge_results_rrf(
         self,
@@ -267,359 +244,9 @@ class RetrievalService:
 
         return deduplicated
 
-    def hybrid_search(
-        self,
-        query: str,
-        limit: int = 5,
-        include_memory: bool = False,
-        expand_neighbors: bool = False,
-        filters: Optional[Dict] = None
-    ) -> List[MergedResult]:
-        """
-        Search across multiple collections with RRF merging.
-
-        Args:
-            query: Search query text
-            limit: Maximum results to return
-            include_memory: Include memory collection in search
-            expand_neighbors: Include ±1 chunks for context
-            filters: Optional metadata filters
-
-        Returns:
-            List of merged and deduplicated results
-
-        Raises:
-            RetrievalError: If search fails
-        """
-        try:
-            # Generate query embedding
-            query_embedding = self.embedding_service.generate_embedding(query)
-
-            # Determine collections to search
-            collections_to_search = ["artifacts", "artifact_chunks"]
-            if include_memory:
-                collections_to_search.append("memory")
-
-            # Parallel searches
-            results_by_collection: Dict[str, List[SearchResult]] = {}
-
-            for collection_name in collections_to_search:
-                results = self._search_collection(
-                    collection_name=collection_name,
-                    query_embedding=query_embedding,
-                    limit=limit * 3,  # Overfetch for RRF
-                    filters=filters
-                )
-                results_by_collection[collection_name] = results
-
-            # Quality: drop very weak semantic matches before RRF so noisy chunks
-            # don't win by rank-fusion alone.
-            raw_total = sum(len(v) for v in results_by_collection.values())
-            if DEFAULT_MAX_DISTANCE is not None and raw_total > 0:
-                filtered_by_collection: Dict[str, List[SearchResult]] = {}
-                for cname, results in results_by_collection.items():
-                    filtered_by_collection[cname] = [
-                        r for r in results
-                        if r.distance is None or r.distance <= DEFAULT_MAX_DISTANCE
-                    ]
-
-                filtered_total = sum(len(v) for v in filtered_by_collection.values())
-                if filtered_total > 0:
-                    results_by_collection = filtered_by_collection
-
-            # Apply RRF merging
-            merged_results = self.merge_results_rrf(results_by_collection, limit * 2)
-
-            # Deduplicate by artifact_id
-            deduplicated = self.deduplicate_by_artifact(merged_results)
-
-            def _extract_anchor_tokens(q: str) -> List[str]:
-                import re
-                tokens = re.findall(r"[a-z0-9]+", (q or "").lower())
-                stop = {
-                    "the","a","an","and","or","of","to","in","on","for","by","with","at","from",
-                    "is","are","was","were","be","been","it","this","that","as"
-                }
-                anchors = []
-                for t in tokens:
-                    if t in stop:
-                        continue
-                    if t.isdigit() or len(t) >= 4:
-                        anchors.append(t)
-                # keep unique in order
-                seen=set(); out=[]
-                for t in anchors:
-                    if t not in seen:
-                        out.append(t); seen.add(t)
-                return out
-
-            def _chunk_anchor_match_count(anchors: List[str], content: str) -> int:
-                if not anchors or not content:
-                    return 0
-                lc = content.lower()
-                return sum(1 for t in anchors if t in lc)
-
-            anchors = _extract_anchor_tokens(query)
-
-            # Limit to requested count, but skip low-quality chunks when the query is specific.
-            final_results: List[MergedResult] = []
-            for r in deduplicated:
-                if len(final_results) >= limit:
-                    break
-
-                if (
-                    CHUNK_MIN_ANCHOR_MATCHES > 0
-                    and r.result.is_chunk
-                    and len(anchors) >= 3  # only apply for sufficiently specific queries
-                ):
-                    if _chunk_anchor_match_count(anchors, r.result.content) < CHUNK_MIN_ANCHOR_MATCHES:
-                        continue
-
-                final_results.append(r)
-
-            # Expand neighbors if requested
-            if expand_neighbors:
-                self._expand_neighbors(final_results)
-
-            logger.info(
-                f"Hybrid search completed: query_length={len(query)}, "
-                f"collections={collections_to_search}, results={len(final_results)}"
-            )
-
-            return final_results
-
-        except Exception as e:
-            logger.error(f"Hybrid search failed: {e}")
-            raise RetrievalError(f"Failed to perform hybrid search: {e}")
-
-    def _search_collection(
-        self,
-        collection_name: str,
-        query_embedding: List[float],
-        limit: int,
-        filters: Optional[Dict] = None
-    ) -> List[SearchResult]:
-        """
-        Search a single collection.
-
-        Args:
-            collection_name: Name of collection to search
-            query_embedding: Query embedding vector
-            limit: Maximum results
-            filters: Optional metadata filters
-
-        Returns:
-            List of search results
-        """
-        # Get collection
-        if collection_name == "memory":
-            collection = get_memory_collection(self.chroma_client)
-        elif collection_name == "artifacts":
-            collection = get_artifacts_collection(self.chroma_client)
-        elif collection_name == "artifact_chunks":
-            collection = get_artifact_chunks_collection(self.chroma_client)
-        else:
-            return []
-
-        # Build query parameters
-        query_params = {
-            "query_embeddings": [query_embedding],
-            "n_results": limit
-        }
-
-        if filters:
-            query_params["where"] = filters
-
-        # Execute search
-        try:
-            results = collection.query(**query_params)
-
-            # Parse results
-            search_results = []
-            ids = results.get("ids", [[]])[0]
-            documents = results.get("documents", [[]])[0]
-            metadatas = results.get("metadatas", [[]])[0]
-            distances = results.get("distances", [[]])[0]
-
-            for rank, (id, doc, metadata, distance) in enumerate(
-                zip(ids, documents, metadatas, distances)
-            ):
-                is_chunk = "::" in id
-                artifact_id = id.split("::")[0] if is_chunk else None
-
-                search_results.append(SearchResult(
-                    id=id,
-                    content=doc,
-                    metadata=metadata or {},
-                    collection=collection_name,
-                    rank=rank,
-                    distance=distance,
-                    is_chunk=is_chunk,
-                    artifact_id=artifact_id
-                ))
-
-            return search_results
-
-        except Exception as e:
-            logger.error(f"Failed to search collection {collection_name}: {e}")
-            return []
-
-    def _expand_neighbors(self, results: List[MergedResult]):
-        """
-        Expand chunk results to include ±1 neighbors.
-
-        Args:
-            results: List of merged results to expand (modified in place)
-        """
-        for result in results:
-            if not result.result.is_chunk:
-                continue
-
-            # Get artifact_id and chunk_index
-            artifact_id = result.result.artifact_id
-            chunk_index = result.result.metadata.get("chunk_index")
-
-            if artifact_id is None or chunk_index is None:
-                continue
-
-            # Fetch all chunks for artifact
-            try:
-                chunks_data = get_chunks_by_artifact(
-                    self.chroma_client,
-                    artifact_id
-                )
-
-                if not chunks_data:
-                    continue
-
-                # Convert to Chunk objects
-                from storage.models import Chunk
-                chunks = [
-                    Chunk(
-                        chunk_id=c["chunk_id"],
-                        artifact_id=c["metadata"]["artifact_id"],
-                        chunk_index=c["metadata"]["chunk_index"],
-                        content=c["content"],
-                        start_char=c["metadata"]["start_char"],
-                        end_char=c["metadata"]["end_char"],
-                        token_count=c["metadata"]["token_count"],
-                        content_hash=c["metadata"]["content_hash"]
-                    )
-                    for c in chunks_data
-                ]
-
-                # Expand with neighbors
-                expanded_content = self.chunking_service.expand_chunk_neighbors(
-                    artifact_id=artifact_id,
-                    chunk_index=chunk_index,
-                    all_chunks=chunks
-                )
-
-                # Update result content
-                result.result.content = expanded_content
-
-            except Exception as e:
-                logger.error(
-                    f"Failed to expand neighbors for {artifact_id}: {e}"
-                )
-
     # =========================================================================
-    # V4: Graph Expansion Methods
+    # V6: Graph Expansion Methods
     # =========================================================================
-
-    async def hybrid_search_v4(
-        self,
-        query: str,
-        limit: int = 5,
-        include_memory: bool = False,
-        expand_neighbors: bool = False,
-        filters: Optional[Dict] = None,
-        # V4 parameters
-        graph_expand: bool = False,
-        graph_depth: int = 1,
-        graph_budget: int = 10,
-        graph_seed_limit: int = 5,
-        graph_filters: Optional[Dict] = None,
-        include_entities: bool = False,
-        # Optional: when provided, seed graph expansion from these Postgres event IDs
-        # (higher precision for queries that match semantic_event directly).
-        seed_event_ids: Optional[List[UUID]] = None
-    ) -> V4SearchResult:
-        """
-        V4 hybrid search with optional graph expansion.
-
-        When graph_expand=false, returns V3-compatible shape.
-        When graph_expand=true, performs graph expansion from seed results.
-
-        Args:
-            query: Search query text
-            limit: Maximum primary results to return
-            include_memory: Include memory collection in search
-            expand_neighbors: Include ±1 chunks for context (V3)
-            filters: Optional metadata filters
-
-            # V4 parameters
-            graph_expand: Enable graph expansion from results
-            graph_depth: Graph traversal depth (1-2)
-            graph_budget: Maximum related context items
-            graph_seed_limit: Maximum seed results for graph expansion
-            graph_filters: Category filters for graph expansion
-            include_entities: Include entity information in response
-
-        Returns:
-            V4SearchResult with primary_results, related_context, entities
-
-        Raises:
-            RetrievalError: If search fails
-        """
-        try:
-            # Perform standard hybrid search
-            primary_results = self.hybrid_search(
-                query=query,
-                limit=limit,
-                include_memory=include_memory,
-                expand_neighbors=expand_neighbors,
-                filters=filters
-            )
-
-            # V3 fallback: just return primary results
-            if not graph_expand or not self.graph_service:
-                return V4SearchResult(
-                    primary_results=primary_results,
-                    related_context=[],
-                    entities=[],
-                    expand_options={
-                        "graph_expand": False,
-                        "reason": "graph_expand=false or graph_service unavailable"
-                    }
-                )
-
-            # V4: Perform graph expansion
-            related_context, entities = await self._perform_graph_expansion(
-                primary_results=primary_results[:graph_seed_limit],
-                depth=graph_depth,
-                budget=graph_budget,
-                category_filter=graph_filters.get("categories") if graph_filters else None,
-                include_entities=include_entities,
-                seed_event_ids=seed_event_ids[:graph_seed_limit] if seed_event_ids else None
-            )
-
-            return V4SearchResult(
-                primary_results=primary_results,
-                related_context=related_context,
-                entities=entities,
-                expand_options={
-                    "graph_expand": True,
-                    "graph_depth": graph_depth,
-                    "graph_budget": graph_budget,
-                    "graph_seed_limit": graph_seed_limit,
-                    "seeds_used": len(primary_results[:graph_seed_limit])
-                }
-            )
-
-        except Exception as e:
-            logger.error(f"V4 hybrid search failed: {e}")
-            raise RetrievalError(f"Failed to perform V4 hybrid search: {e}")
 
     async def _perform_graph_expansion(
         self,
@@ -649,7 +276,7 @@ class RetrievalService:
         Returns:
             Tuple of (related_context, entities)
         """
-        # V5: Only requires pg_client, not graph_service (uses SQL joins)
+        # V6: Only requires pg_client (uses SQL joins, no AGE/graph_service)
         if not self.pg_client:
             return [], []
 
@@ -710,7 +337,7 @@ class RetrievalService:
             return [], []
 
     # =========================================================================
-    # V5: Simplified Search over V5 Collections
+    # V6: Unified Search over Content/Chunks Collections
     # =========================================================================
 
     async def hybrid_search_v5(
@@ -725,9 +352,9 @@ class RetrievalService:
         min_importance: Optional[float] = None,
     ) -> V4SearchResult:
         """
-        V5 hybrid search over content and chunks collections.
+        V6 hybrid search over content and chunks collections.
 
-        Searches the unified V5 content collection and optionally
+        Searches the unified content collection and optionally
         performs graph expansion via Postgres SQL joins.
 
         Args:
@@ -747,7 +374,7 @@ class RetrievalService:
             # Generate query embedding
             query_embedding = self.embedding_service.generate_embedding(query)
 
-            # Search both V5 collections: content (small docs) and chunks (large docs)
+            # Search both V6 collections: content (small docs) and chunks (large docs)
             content_col = get_content_collection(self.chroma_client)
             chunks_col = get_chunks_collection(self.chroma_client)
 
@@ -1002,7 +629,7 @@ class RetrievalService:
         """
         Find related events via shared actors/subjects using pure SQL joins.
 
-        V5 replacement for AGE-based graph expansion.
+        V6 graph expansion via SQL (no AGE dependency).
 
         Args:
             seed_event_ids: Event IDs to expand from

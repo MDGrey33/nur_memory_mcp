@@ -1,14 +1,11 @@
 """
-Event worker main loop for async event extraction and graph materialization.
+V6 Event worker - async event extraction with entity resolution.
 
-V3 job types:
-- extract_events: Extract events from artifact text
-
-V4 job types (added):
-- graph_upsert: Materialize entities and events into AGE graph
+Job types:
+- extract_events: Extract semantic events from artifact text
 
 Polls Postgres for PENDING jobs, claims them atomically, processes using LLM,
-and writes results back to Postgres.
+and writes results back to Postgres. Graph expansion uses SQL joins (no AGE).
 """
 
 import asyncio
@@ -27,15 +24,13 @@ from services.entity_resolution_service import (
     ExtractedEntity,
     ContextClues
 )
-# V5: GraphService removed - graph expansion uses Postgres SQL joins
-# from services.graph_service import GraphService
 from services.embedding_service import EmbeddingService
 
 logger = logging.getLogger("event_worker")
 
 
 class EventWorker:
-    """Async event extraction and graph materialization worker."""
+    """V6 event extraction worker with entity resolution."""
 
     def __init__(self, config: Config, enable_v4: bool = True):
         """
@@ -43,7 +38,7 @@ class EventWorker:
 
         Args:
             config: Configuration object
-            enable_v4: Enable V4 features (entity resolution, graph)
+            enable_v4: Enable entity resolution features
         """
         self.config = config
         self.worker_id = config.worker_id or f"worker-{uuid4().hex[:8]}"
@@ -57,11 +52,9 @@ class EventWorker:
         self.extraction_service: Optional[EventExtractionService] = None
         self.job_service: Optional[JobQueueService] = None
 
-        # V4 services
+        # Entity resolution services
         self.embedding_service: Optional[EmbeddingService] = None
         self.entity_resolution_service: Optional[EntityResolutionService] = None
-        # V5: GraphService removed - graph expansion uses Postgres SQL joins
-        self.graph_service = None
 
     async def initialize(self) -> None:
         """Initialize all services."""
@@ -131,10 +124,6 @@ class EventWorker:
             )
             logger.info("  Entity Resolution Service: OK")
 
-            # V5: GraphService removed - graph expansion uses Postgres SQL joins
-            # No AGE dependency in V5
-            logger.info("  Graph Service: Disabled (V5 uses Postgres SQL joins)")
-
         logger.info("Worker services initialized")
 
     async def shutdown(self) -> None:
@@ -179,9 +168,8 @@ class EventWorker:
             await self._process_extract_events_job(job)
             return
 
-        # V5: graph_upsert jobs are disabled - graph expansion uses Postgres SQL joins
+        # V6: graph_upsert jobs are disabled - graph expansion uses Postgres SQL joins
         # Legacy graph_upsert jobs in queue will be ignored and eventually expire
-        # This removes the AGE dependency from the worker codepath entirely
         pass
 
     async def _process_extract_events_job(self, job: Dict[str, Any]) -> None:
@@ -377,102 +365,16 @@ class EventWorker:
             if event_entities:
                 entity_event_map[str(idx)] = event_entities
 
-        # Write events with V4 entity relationships
-        # V5: graph_upsert disabled - expansion uses Postgres joins instead of AGE
+        # Write events with entity relationships
+        # V6: graph_upsert disabled - expansion uses Postgres joins (no AGE)
         await self.job_service.write_events_atomic_v4(
             artifact_uid=artifact_uid,
             revision_id=revision_id,
             extraction_run_id=job_id,
             events=valid_events,
             entity_event_map=entity_event_map,
-            enqueue_graph_upsert=False  # V5: AGE graph removed
+            enqueue_graph_upsert=False  # V6: AGE graph removed
         )
-
-    async def _process_graph_upsert_job(self, job: Dict[str, Any]) -> None:
-        """Process a graph_upsert job (V4)."""
-        job_id = UUID(job["job_id"])
-        artifact_uid = job["artifact_uid"]
-        revision_id = job["revision_id"]
-
-        logger.info(f"Processing graph_upsert job {job_id}: {artifact_uid}/{revision_id}")
-
-        try:
-            # Check if AGE is available
-            if not await self.graph_service.check_age_available():
-                logger.warning("AGE not available, marking job done without processing")
-                await self.job_service.mark_job_done(job_id)
-                return
-
-            # Get entities for this revision
-            entities = await self.job_service.get_entities_for_revision(artifact_uid, revision_id)
-
-            # Upsert entity nodes
-            for entity in entities:
-                await self.graph_service.upsert_entity_node(
-                    entity_id=entity["entity_id"],
-                    canonical_name=entity["canonical_name"],
-                    entity_type=entity["entity_type"],
-                    role=entity.get("role"),
-                    organization=entity.get("organization")
-                )
-
-            logger.info(f"Upserted {len(entities)} entity nodes")
-
-            # Get events with actor/subject relationships
-            events = await self.job_service.get_events_for_revision(artifact_uid, revision_id)
-
-            # Upsert event nodes and edges
-            for event in events:
-                event_id = event["event_id"]
-
-                # Upsert event node
-                await self.graph_service.upsert_event_node(
-                    event_id=event_id,
-                    category=event["category"],
-                    narrative=event["narrative"],
-                    artifact_uid=artifact_uid,
-                    revision_id=revision_id,
-                    event_time=event["event_time"].isoformat() if event.get("event_time") else None,
-                    confidence=event.get("confidence", 1.0)
-                )
-
-                # Upsert ACTED_IN edges
-                for actor in event.get("actors", []):
-                    await self.graph_service.upsert_acted_in_edge(
-                        entity_id=actor["entity_id"],
-                        event_id=event_id,
-                        role=actor.get("role", "other")
-                    )
-
-                # Upsert ABOUT edges
-                for subject in event.get("subjects", []):
-                    await self.graph_service.upsert_about_edge(
-                        event_id=event_id,
-                        entity_id=subject["entity_id"]
-                    )
-
-            logger.info(f"Upserted {len(events)} event nodes with edges")
-
-            # Handle uncertain entity pairs (POSSIBLY_SAME edges)
-            uncertain_pairs = self.entity_resolution_service.get_uncertain_pairs()
-            for entity_a_id, entity_b_id, confidence, reason in uncertain_pairs:
-                await self.graph_service.upsert_possibly_same_edge(
-                    entity_a_id=entity_a_id,
-                    entity_b_id=entity_b_id,
-                    confidence=confidence,
-                    reason=reason
-                )
-
-            if uncertain_pairs:
-                logger.info(f"Upserted {len(uncertain_pairs)} POSSIBLY_SAME edges")
-
-            # Mark job done
-            await self.job_service.mark_job_done(job_id)
-            logger.info(f"Graph upsert job {job_id} completed successfully")
-
-        except Exception as e:
-            logger.error(f"Graph upsert job {job_id} failed: {e}", exc_info=True)
-            await self._mark_job_failed(job_id, e)
 
     async def _mark_job_failed(self, job_id: UUID, error: Exception) -> None:
         """Mark a job as failed with appropriate retry logic."""
@@ -496,7 +398,7 @@ class EventWorker:
 
     async def fetch_artifact_text(self, artifact_id: str) -> str:
         """
-        Fetch artifact text from ChromaDB (V5 content collection).
+        Fetch artifact text from ChromaDB (V6 content collection).
 
         Args:
             artifact_id: Artifact ID (art_xxx format)
@@ -505,23 +407,13 @@ class EventWorker:
             Full artifact text
         """
         client = self.chroma_manager.get_client()
-        from storage.collections import get_content_by_id, get_artifacts_collection
+        from storage.collections import get_content_by_id
 
-        # Try V5 content collection first
         result = get_content_by_id(client, artifact_id)
         if result and result.get("content"):
             return result["content"]
 
-        # Fall back to legacy artifacts collection for backwards compatibility
-        try:
-            collection = get_artifacts_collection(client)
-            results = collection.get(ids=[artifact_id])
-            if results and results.get("documents"):
-                return results["documents"][0]
-        except Exception:
-            pass
-
-        raise ValueError(f"Artifact {artifact_id} not found in ChromaDB (V5 or legacy)")
+        raise ValueError(f"Artifact {artifact_id} not found in content collection")
 
     async def fetch_chunk_texts(
         self,
@@ -529,7 +421,7 @@ class EventWorker:
         chunk_count: int
     ) -> List[tuple]:
         """
-        Fetch all chunk texts from ChromaDB (V5 chunks collection).
+        Fetch all chunk texts from ChromaDB (V6 chunks collection).
 
         Args:
             artifact_id: Artifact ID (art_xxx format)
@@ -539,22 +431,14 @@ class EventWorker:
             List of (text, chunk_index, chunk_id, start_char) tuples
         """
         client = self.chroma_manager.get_client()
-        from storage.collections import get_v5_chunks_by_content, get_chunks_by_artifact
+        from storage.collections import get_v5_chunks_by_content
 
-        # Try V5 chunks collection first
         chunks = get_v5_chunks_by_content(client, artifact_id)
-
-        # Fall back to legacy artifact_chunks collection
-        if not chunks:
-            try:
-                chunks = get_chunks_by_artifact(client, artifact_id)
-            except Exception:
-                chunks = []
 
         if len(chunks) != chunk_count:
             logger.warning(f"Expected {chunk_count} chunks, found {len(chunks)}")
 
-        # Sort by chunk_index (already sorted by V5 helper, but ensure)
+        # Sort by chunk_index (already sorted by helper, but ensure)
         chunks.sort(key=lambda c: c["metadata"].get("chunk_index", 0))
 
         result = []

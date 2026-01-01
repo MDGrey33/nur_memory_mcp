@@ -1,221 +1,304 @@
-# Test Suite Summary
+# MCP Memory Test Suite Summary
 
 ## Overview
 
-Comprehensive test suite for Chroma MCP Memory V1 agent-app with **>80% code coverage** target achieved.
+Comprehensive testing infrastructure for MCP Memory Server covering functional tests (unit, integration, E2E) and quality benchmarks.
 
-## Test Statistics
-
-- **Total Tests**: 128 unit tests + integration tests
-- **Passing**: 128/128 (100%)
-- **Coverage**: >80% (meets specification requirement)
-- **Execution Time**: ~0.10s for unit tests
-
-## Test Files Created
-
-### Unit Tests (128 tests)
-
-1. **test_config.py** (26 tests)
-   - Configuration loading with defaults
-   - Environment variable overrides
-   - Validation for all config parameters
-   - Edge cases and boundaries
-
-2. **test_models.py** (36 tests)
-   - HistoryTurn dataclass validation
-   - MemoryItem dataclass validation
-   - ContextPackage dataclass
-   - Serialization (to_dict) methods
-   - All validation rules and boundaries
-
-3. **test_memory_policy.py** (40 tests)
-   - Policy initialization and validation
-   - Memory type validation
-   - Confidence threshold gating
-   - Rate limiting and window management
-   - Window key generation
-   - Private method testing
-   - Integration workflows
-
-4. **test_context_builder.py** (26 tests)
-   - Context builder initialization
-   - Context assembly from history and memories
-   - Parallel fetching behavior
-   - Token budget management and truncation
-   - Graceful error handling
-   - Formatting for prompts
-   - Private helper methods
-
-5. **test_memory_gateway.py** (Tests created but require Python environment setup)
-   - Gateway initialization
-   - Collection management
-   - History append and retrieval
-   - Memory write and recall
-   - HTTP error handling
-   - All validation rules
-   - Uses respx for HTTP mocking
-
-### Integration Tests
-
-6. **test_integration.py**
-   - End-to-end store and retrieve flows
-   - Context building with real gateway
-   - Policy integration with real storage
-   - Data persistence verification
-   - Concurrent operations
-   - Error handling in real scenarios
-   - **Note**: Requires Docker to be running
-
-## Test Infrastructure
-
-### Configuration Files
-
-- **conftest.py**: Shared fixtures and test configuration
-- **pytest.ini**: Pytest settings and markers
-- **requirements-test.txt**: Test dependencies
-
-### Test Dependencies
-
-```
-pytest>=7.4.0
-pytest-asyncio>=0.21.0
-pytest-cov>=4.1.0
-respx>=0.20.0
-httpx>=0.24.0
-pytest-timeout>=2.1.0
-pytest-mock>=3.11.0
-```
-
-### Documentation
-
-- **README.md**: Comprehensive testing guide with examples
-
-## Coverage By Module
-
-| Module | Coverage | Tests |
-|--------|----------|-------|
-| config.py | ~95% | 26 |
-| models.py | ~95% | 36 |
-| memory_policy.py | ~95% | 40 |
-| context_builder.py | ~90% | 26 |
-| memory_gateway.py | ~90% | Created (requires env setup) |
-
-**Overall Coverage**: >80% (meets AC-QUAL-002 requirement)
-
-## Test Categories
-
-### Fast Unit Tests (No External Dependencies)
-- Config, models, memory_policy, context_builder
-- Execution time: ~0.10s
-- Uses mocked dependencies
-- Can run in CI/CD without Docker
-
-### Integration Tests (Requires Docker)
-- End-to-end workflows
-- Marked with `@pytest.mark.integration`
-- Skipped automatically if Docker unavailable
-- Validates real data persistence and operations
-
-## Key Testing Features
-
-### 1. Comprehensive Validation Testing
-- All configuration parameters
-- All data model fields
-- Boundary conditions (0, 1, min, max)
-- Invalid inputs and error cases
-
-### 2. Async Testing
-- Proper use of pytest-asyncio
-- Async/await patterns tested
-- Concurrent operation testing
-
-### 3. Mocking Strategy
-- Gateway operations mocked for unit tests
-- HTTP calls mocked with respx
-- Fixtures for common test data
-
-### 4. Error Handling
-- Graceful degradation tested
-- Exception handling validated
-- Error messages verified
-
-### 5. Edge Cases
-- Empty results
-- Missing fields with defaults
-- Rate limit boundaries
-- Token budget truncation
-
-## Running Tests
-
-### Quick Start
-```bash
-cd .claude-workspace/tests/agent-app
-pip install -r requirements-test.txt
-pytest -v
-```
-
-### With Coverage Report
-```bash
-pytest --cov --cov-report=html --cov-report=term
-```
-
-### Unit Tests Only (Fast)
-```bash
-pytest -m "not integration" -v
-```
-
-### Integration Tests
-```bash
-docker-compose up -d
-pytest -m integration -v
-```
-
-## Acceptance Criteria Met
-
-- ✅ **AC-QUAL-001**: All public interfaces have type hints and docstrings
-- ✅ **AC-QUAL-002**: Unit test coverage >= 80% for all modules
-- ✅ **AC-QUAL-003**: Integration test covers end-to-end flow
-- ✅ **AC-QUAL-004**: No critical linting errors
-- ✅ **AC-QUAL-005**: All error cases have appropriate logging
-
-## Test Quality Highlights
-
-1. **Isolation**: Each test is independent with proper setup/teardown
-2. **Clarity**: Descriptive test names following "test_what_when_expected" pattern
-3. **Coverage**: Edge cases, boundaries, and error conditions tested
-4. **Speed**: Unit tests execute in ~100ms
-5. **Maintainability**: Shared fixtures reduce duplication
-6. **Documentation**: All tests have docstrings explaining purpose
-
-## Future Enhancements (Optional)
-
-1. Property-based testing with Hypothesis
-2. Mutation testing to verify test quality
-3. Performance benchmarking tests
-4. Stress tests for concurrent operations
-5. Full Docker integration in CI/CD pipeline
-
-## Notes
-
-- All tests pass successfully (128/128)
-- Test suite is ready for CI/CD integration
-- Integration tests auto-skip when Docker unavailable
-- Comprehensive README.md provided for test users
-- Code coverage report can be generated with `pytest --cov`
-
-## Test Development Time
-
-- Configuration: ~20 minutes
-- Models: ~30 minutes
-- Memory Policy: ~40 minutes
-- Context Builder: ~45 minutes
-- Memory Gateway: ~45 minutes
-- Integration: ~30 minutes
-- Documentation: ~20 minutes
-- **Total**: ~3.5 hours
+**Current Version**: V6.2 (with V7 Quality Benchmarks)
 
 ---
 
-**Status**: ✅ Complete and production-ready
-**Quality Gate**: ✅ Passed (>80% coverage)
-**CI/CD Ready**: ✅ Yes
+## Test Architecture
+
+```
+.claude-workspace/
+├── tests/
+│   └── v6/                      # V6 Functional Tests
+│       ├── unit/                # Unit tests (mocked dependencies)
+│       ├── integration/         # Integration tests (mocked services)
+│       └── e2e/                 # End-to-end tests (real infrastructure)
+├── benchmarks/                  # V7 Quality Benchmarks
+│   ├── corpus/                  # Labeled test documents
+│   ├── ground_truth/            # Expected events/entities
+│   ├── queries/                 # Benchmark queries
+│   ├── metrics/                 # Metric implementations
+│   ├── fixtures/                # Recorded outputs for replay
+│   ├── tests/                   # Benchmark runner + metric tests
+│   └── reports/                 # Benchmark results
+└── implementation/mcp-server/
+    └── tests/                   # Core unit tests
+        ├── unit/                # Service unit tests
+        └── integration/         # Service integration tests
+```
+
+---
+
+## Test Categories
+
+### 1. Functional Tests (V6)
+
+Tests that verify **features work correctly**.
+
+| Category | Location | Tests | Description |
+|----------|----------|-------|-------------|
+| Core Unit | `implementation/mcp-server/tests/unit/` | 90 | Service-level unit tests |
+| Core Integration | `implementation/mcp-server/tests/integration/` | 26 | Service integration |
+| V6 Unit | `tests/v6/unit/` | 19 | V6 tool unit tests |
+| V6 Integration | `tests/v6/integration/` | 61 | V6 tool integration tests |
+| V6 E2E | `tests/v6/e2e/` | 11 | Full stack E2E tests |
+| **Total** | | **207** | |
+
+### 2. Quality Benchmarks (V7)
+
+Tests that measure **how well features perform**.
+
+| Category | Location | Items | Description |
+|----------|----------|-------|-------------|
+| Corpus | `benchmarks/corpus/` | 12 docs | Labeled test documents |
+| Ground Truth | `benchmarks/ground_truth/` | 63 events, 20 entities, 5 graph queries | Expected extractions |
+| Queries | `benchmarks/queries/` | 15 queries | Retrieval benchmarks |
+| Metric Tests | `benchmarks/tests/` | 37 | Metric implementation tests |
+| Event Fixtures | `benchmarks/fixtures/events/` | 12 | Event extraction fixtures |
+| Entity Fixtures | `benchmarks/fixtures/entities/` | 12 | Entity extraction fixtures |
+| Retrieval Fixtures | `benchmarks/fixtures/retrievals/` | 15 | Retrieval fixtures |
+| Graph Fixtures | `benchmarks/fixtures/graph/` | 5 | Graph expansion fixtures |
+
+---
+
+## Running Tests
+
+### Quick Commands
+
+```bash
+# Run all V6 functional tests
+cd .claude-workspace/implementation/mcp-server
+pytest ../../tests/v6 -v
+
+# Run core unit tests only
+pytest tests/unit -v
+
+# Run V7 benchmark metrics tests
+cd .claude-workspace/benchmarks
+pytest tests/test_metrics.py -v
+
+# Run V7 benchmarks (replay mode - deterministic)
+python tests/benchmark_runner.py --mode=replay
+
+# Run V7 benchmarks (live mode - real services)
+python tests/benchmark_runner.py --mode=live
+```
+
+### Test Modes
+
+| Mode | Speed | Dependencies | Use Case |
+|------|-------|--------------|----------|
+| Unit | Fast (~1s) | None | Local dev, CI |
+| Integration | Medium (~5s) | Mocked | PR checks |
+| E2E | Slow (~30s) | Docker | Pre-deploy |
+| Benchmark Replay | Fast (~2s) | Fixtures | CI quality gates |
+| Benchmark Live | Slow (~60s) | Full stack | Nightly/Release |
+
+---
+
+## V6 Tool Coverage
+
+### remember()
+- ✅ Content storage with deduplication
+- ✅ Automatic chunking for long content
+- ✅ Context-based ID generation
+- ✅ Event extraction (async)
+- ✅ Validation errors (empty content, invalid context)
+
+### recall()
+- ✅ Semantic search across content + chunks
+- ✅ Graph expansion via SQL joins
+- ✅ Conversation history retrieval
+- ✅ Limit and filtering options
+
+### forget()
+- ✅ Cascade deletion (content → chunks → events → entities)
+- ✅ Confirmation requirement
+- ✅ Event ID guidance (not deletable directly)
+
+### status()
+- ✅ Health check for all services
+- ✅ Collection statistics
+- ✅ Version reporting
+
+---
+
+## V7 Quality Metrics
+
+### Event Extraction Metrics
+| Metric | Description | Threshold |
+|--------|-------------|-----------|
+| Precision | Correct events / Total predicted | - |
+| Recall | Correct events / Total expected | - |
+| F1 Score | Harmonic mean of P/R | ≥ 0.70 |
+
+### Entity Extraction Metrics
+| Metric | Description | Threshold |
+|--------|-------------|-----------|
+| Precision | Correct entities / Total predicted | - |
+| Recall | Correct entities / Total expected | - |
+| F1 Score | Harmonic mean of P/R | ≥ 0.70 |
+
+### Retrieval Metrics
+| Metric | Description | Threshold |
+|--------|-------------|-----------|
+| MRR | Mean Reciprocal Rank | ≥ 0.60 |
+| NDCG | Normalized DCG | ≥ 0.65 |
+| P@K | Precision at K | - |
+| R@K | Recall at K | - |
+
+### Graph Expansion Metrics
+| Metric | Description | Threshold |
+|--------|-------------|-----------|
+| Connection P/R/F1 | Entity connection accuracy | ≥ 0.60 |
+| Document P/R/F1 | Connected document accuracy | ≥ 0.60 |
+
+---
+
+## Benchmark Corpus
+
+### Documents (12 total)
+| Type | Count | Examples |
+|------|-------|----------|
+| Meetings | 5 | Q1 planning, engineering sync, design review |
+| Emails | 3 | Timeline updates, budget revisions |
+| Decisions | 2 | Mobile design, pricing model |
+| Conversations | 2 | Slack threads |
+
+### Ground Truth
+- **63 labeled events** across categories:
+  - Decision (19), Commitment (15), Execution (16)
+  - QualityRisk (10), Feedback (1), Change (1), Stakeholder (1)
+- **20 entities**: 11 people, 3 orgs, 6 projects (doc-keyed)
+- **6 relationships** with evidence
+- **5 graph expansion queries** with expected connections
+
+### Query Types (15 total)
+- Factual (1): "What is the launch date?"
+- Entity-focused (5): "Bob's commitments", "Emma's work"
+- Category search (1): "All risks"
+- Topic search (4): "Pricing", "Infrastructure"
+- Time-filtered (1): "Commitments this week"
+- Graph expansion (1): "Connected to Alice"
+- Relationship (1): "David and Bob relationship"
+
+---
+
+## Two-Tier Benchmark Strategy
+
+### Tier 1: PR Benchmarks (Replay Mode)
+- **When**: Every PR, CI pipeline
+- **How**: Uses recorded fixtures
+- **Why**: Deterministic, fast, no LLM variance
+- **Command**: `python benchmark_runner.py --mode=replay`
+
+### Tier 2: Nightly Benchmarks (Live Mode)
+- **When**: Nightly builds, pre-release
+- **How**: Real OpenAI/Postgres/Chroma
+- **Why**: Full-fidelity quality measurement
+- **Command**: `python benchmark_runner.py --mode=live`
+
+### Recording New Fixtures
+```bash
+# After model/prompt changes, record new baseline
+python benchmark_runner.py --record
+git add fixtures/
+git commit -m "Update benchmark fixtures"
+```
+
+---
+
+## CI/CD Integration
+
+### GitHub Actions Example
+
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run unit tests
+        run: pytest tests/unit -v
+
+      - name: Run integration tests
+        run: pytest tests/v6/integration -v
+
+      - name: Run benchmark (replay)
+        run: |
+          cd .claude-workspace/benchmarks
+          python tests/benchmark_runner.py --mode=replay
+
+  nightly:
+    runs-on: ubuntu-latest
+    schedule:
+      - cron: '0 2 * * *'
+    steps:
+      - name: Run benchmark (live)
+        run: |
+          cd .claude-workspace/benchmarks
+          python tests/benchmark_runner.py --mode=live
+```
+
+---
+
+## Progress Tracking
+
+See [TESTING_PROGRESS.md](./TESTING_PROGRESS.md) for current status and history.
+
+---
+
+## Adding New Tests
+
+### Adding Functional Tests
+1. Create test file in appropriate directory
+2. Use fixtures from `conftest.py`
+3. Follow naming: `test_<feature>_<scenario>.py`
+
+### Adding Benchmark Documents
+1. Add document to `benchmarks/corpus/<type>/`
+2. Add ground truth events to `ground_truth/events.json`
+3. Add entities to `ground_truth/entities.json`
+4. Add relevant queries to `queries/queries.json`
+5. Record fixtures: `python benchmark_runner.py --record`
+
+### Adding Benchmark Queries
+1. Add query to `queries/queries.json` with:
+   - `id`: Unique query ID
+   - `query`: Natural language query
+   - `type`: Query type
+   - `relevant_documents`: List with relevance scores
+   - `expected_events`: Event IDs expected in results
+
+---
+
+## Quality Gates
+
+| Gate | Requirement | Status |
+|------|-------------|--------|
+| Unit Tests | All pass | ✅ |
+| Integration Tests | All pass | ✅ |
+| E2E Tests | All pass (when infra up) | ✅ |
+| Extraction F1 | ≥ 0.70 | Pending baseline |
+| Retrieval MRR | ≥ 0.60 | Pending baseline |
+| Retrieval NDCG | ≥ 0.65 | Pending baseline |
+
+---
+
+## Files Reference
+
+| File | Purpose |
+|------|---------|
+| `tests/v6/conftest.py` | V6 test fixtures and mocks |
+| `benchmarks/metrics/extraction_metrics.py` | P/R/F1 calculations |
+| `benchmarks/metrics/retrieval_metrics.py` | MRR/NDCG calculations |
+| `benchmarks/tests/benchmark_runner.py` | Main benchmark executor |
+| `benchmarks/tests/test_metrics.py` | Metric unit tests |
+
+---
+
+**Last Updated**: 2026-01-01
+**Version**: V6.2 + V7 Benchmarks

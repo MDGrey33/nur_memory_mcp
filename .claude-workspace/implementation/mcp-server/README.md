@@ -1,31 +1,38 @@
-# MCP Memory Server v4.0 (HTTP Transport)
+# MCP Memory Server v6.2 (HTTP Transport)
 
-A persistent memory system for Claude using HTTP-based MCP transport with **semantic event extraction** and **V4 graph-backed context expansion**. Just point Claude to a URL.
+A persistent memory system for Claude using HTTP-based MCP transport with **semantic event extraction** and **graph-backed context expansion**.
 
-**Version**: 4.0.0 | **Status**: Production Ready
+**Version**: 6.2.0 | **Status**: Production Ready
+
+## Port Configuration
+
+| Environment | Compose File | Default Port |
+|-------------|--------------|--------------|
+| Default/Prod | `docker-compose.yml` | 3000 |
+| Local Dev | `docker-compose.local.yml` | 3001 |
+| Test | `docker-compose.test.yml` | 3201 |
+
+*Source of truth: `.claude-workspace/deployment/` compose files*
 
 ## Quick Start
 
 ### 1. Start the server
 
 ```bash
-# Start ChromaDB first
-docker run -d --name chromadb -p 8001:8000 \
-  -v chroma_data:/chroma/chroma \
-  -e IS_PERSISTENT=TRUE \
-  chromadb/chroma:latest
+cd .claude-workspace/deployment
+docker compose up -d
+```
 
-# Install dependencies
-pip install -r requirements.txt
+Or manually:
+```bash
+# Start infrastructure
+docker run -d --name chromadb -p 8001:8000 chromadb/chroma:0.5.23
+docker run -d --name postgres -p 5432:5432 -e POSTGRES_PASSWORD=postgres pgvector/pgvector:pg16
 
 # Run the server
 cd mcp-server
+pip install -r requirements.txt
 python src/server.py
-```
-
-Or use Docker Compose:
-```bash
-docker compose up -d
 ```
 
 ### 2. Configure Claude
@@ -36,7 +43,7 @@ docker compose up -d
 {
   "mcpServers": {
     "memory": {
-      "url": "http://localhost:3000/mcp/"
+      "url": "http://localhost:3001/mcp/"
     }
   }
 }
@@ -44,11 +51,9 @@ docker compose up -d
 
 **For Claude Desktop / Claude.ai**:
 
-1. Start ngrok: `ngrok http 3000`
-2. Open **Claude Desktop** or **Claude.ai** (web)
-3. Go to **Settings** → **Connectors**
-4. Click **Add Custom Connector**
-5. Enter:
+1. Start ngrok: `ngrok http 3001`
+2. Go to **Settings** → **Connectors** → **Add Custom Connector**
+3. Enter:
    - **Name**: `memory`
    - **URL**: `https://your-ngrok-url.ngrok-free.app/mcp/`
 
@@ -56,66 +61,72 @@ docker compose up -d
 
 **Important**: Include the trailing slash in the URL!
 
-## Client Compatibility Notes (Claude Desktop / Cursor)
-
-This MCP server uses **Streamable HTTP** (long-lived **SSE**).
-
-- **Canonical URL**: configure clients with the trailing slash: `.../mcp/`
-- **Clients may still use `/mcp`**: some clients will send requests to `/mcp` (no trailing slash) even if configured with `/mcp/`.
-  - The server supports this by issuing a **relative** redirect: `Location: /mcp/` (HTTP 307) and then serving MCP on `/mcp/`.
-- **Behind proxies (ngrok, reverse proxy)**: redirects must preserve HTTPS.
-  - The server honors forwarded headers so `/mcp` never redirects to `http://...` when accessed via `https://...`.
-
-### 3. Restart Claude and test
+### 3. Test it
 
 Ask Claude:
-> "Store a memory that I prefer Python over JavaScript"
+> "Remember that I prefer Python over JavaScript"
 
 Then later:
-> "What do you remember about my coding preferences?"
+> "What do you recall about my coding preferences?"
 
-## Available Tools (17 total)
+## Available Tools (4)
 
-### Memory Tools
 | Tool | Description |
 |------|-------------|
-| `memory_store` | Store a memory with type and confidence |
-| `memory_search` | Semantic search over memories |
-| `memory_list` | List all stored memories |
-| `memory_delete` | Delete a specific memory |
+| `remember` | Store content with automatic chunking, embedding, and event extraction |
+| `recall` | Find content with semantic search and graph expansion |
+| `forget` | Delete content with cascade (chunks, events, entities) |
+| `status` | Check system health and job status |
 
-### History Tools
-| Tool | Description |
-|------|-------------|
-| `history_append` | Add to conversation history |
-| `history_get` | Retrieve conversation history |
+### remember()
 
-### Artifact Tools
-| Tool | Description |
-|------|-------------|
-| `artifact_ingest` | Ingest documents with automatic chunking |
-| `artifact_search` | Search across artifacts |
-| `artifact_get` | Get artifact by ID |
-| `artifact_delete` | Delete an artifact |
+```python
+remember(
+    content: str,           # Required: text to store
+    context: str = None,    # meeting, email, note, preference, fact, conversation
+    source: str = None,     # gmail, slack, manual, user
+    importance: float = 0.5,
+    title: str = None,
+    author: str = None,
+    participants: List[str] = None,
+    date: str = None,       # ISO8601
+)
+```
 
-### Search Tools
-| Tool | Description |
-|------|-------------|
-| `hybrid_search` | Cross-collection semantic search |
-| `embedding_health` | Check embedding service health |
+### recall()
 
-### V3+ Semantic Event Tools
-| Tool | Description |
-|------|-------------|
-| `event_search` | Query events with filters (category, time, artifact) |
-| `event_get` | Get single event by ID with evidence |
-| `event_list` | List all events for an artifact |
-| `event_reextract` | Force re-extraction of events |
-| `job_status` | Check extraction job status |
+```python
+recall(
+    query: str = None,      # Semantic search
+    id: str = None,         # Direct lookup (art_xxx or evt_xxx)
+    context: str = None,    # Filter by type
+    limit: int = 10,
+    expand: bool = True,    # Graph expansion (default ON)
+    include_events: bool = True,
+    include_entities: bool = True,
+)
+```
+
+### forget()
+
+```python
+forget(
+    id: str,                # art_xxx only
+    confirm: bool = False,  # Safety flag (required)
+)
+```
+
+### status()
+
+```python
+status(
+    artifact_id: str = None,  # Check specific job status
+)
+```
 
 ## Configuration
 
-Environment variables:
+Environment variables (see `.env.example`):
 
 ### Core
 | Variable | Default | Description |
@@ -130,14 +141,14 @@ Environment variables:
 | `CHROMA_HOST` | localhost | ChromaDB hostname |
 | `CHROMA_PORT` | 8001 | ChromaDB port |
 
-### V3: PostgreSQL (Events)
+### PostgreSQL
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `EVENTS_DB_DSN` | (required) | Postgres connection string |
 | `POSTGRES_POOL_MIN` | 2 | Min pool connections |
 | `POSTGRES_POOL_MAX` | 10 | Max pool connections |
 
-### V3: Event Extraction
+### Event Extraction
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OPENAI_EVENT_MODEL` | gpt-4o-mini | Model for event extraction |
@@ -148,22 +159,10 @@ Environment variables:
 
 ```bash
 # Health check
-curl http://localhost:3000/health
+curl http://localhost:3001/health
 
-# MCP endpoint (should return SSE error without proper headers)
-curl http://localhost:3000/mcp/
-```
-
-## Persistence
-
-All data is stored in ChromaDB with Docker volumes. Your memories survive:
-- Container restarts
-- Server updates
-- Docker Compose down/up
-
-To completely reset:
-```bash
-docker volume rm chroma_data
+# MCP endpoint
+curl http://localhost:3001/mcp/
 ```
 
 ## Architecture
@@ -171,7 +170,7 @@ docker volume rm chroma_data
 ```
 Claude Desktop/Code
        ↓
-   HTTP (port 3000)
+   HTTP (port 3001)
        ↓
 MCP Memory Server (Streamable HTTP)
        ↓
@@ -180,18 +179,30 @@ MCP Memory Server (Streamable HTTP)
 ChromaDB         PostgreSQL      Event Worker
 (port 8001)      (port 5432)     (background)
    │                 │                 │
-   │   Embeddings    │   Events &      │   LLM
-   │   & Vectors     │   Job Queue     │   Extraction
+   │  content &      │  Events &       │  LLM
+   │  chunks         │  Entities       │  Extraction
    └─────────────────┴─────────────────┘
 ```
 
-### V3 Event Flow
-1. User ingests artifact via `artifact_ingest`
-2. Server writes to ChromaDB (embeddings) + PostgreSQL (revision)
-3. Job enqueued for event extraction
-4. Event Worker claims job, calls OpenAI for extraction
-5. Events written to PostgreSQL with evidence links
-6. User queries via `event_search`, `event_list`, etc.
+### Data Flow
+
+1. User calls `remember(content="...")`
+2. Server generates content-based ID (`art_` + SHA256[:12])
+3. Content stored in ChromaDB with embeddings
+4. Large content (>900 tokens) chunked with overlap
+5. Job enqueued for semantic event extraction
+6. Event Worker extracts events via OpenAI
+7. Entities resolved and linked
+8. User queries via `recall()` with graph expansion
+
+### Graph Expansion
+
+When `recall(expand=True)`:
+1. Primary search finds matching documents
+2. Extract events from primary results
+3. Find entities (actors/subjects) in those events
+4. Find OTHER events with same entities
+5. Return as `related[]` with connection reason
 
 ## Troubleshooting
 
@@ -202,12 +213,24 @@ python src/server.py
 ```
 
 ### Tools don't appear in Claude
-1. Check URL has trailing slash: `http://localhost:3000/mcp/`
+1. Check URL has trailing slash: `http://localhost:3001/mcp/`
 2. Restart Claude completely
-3. Check server logs: `python src/server.py` (in foreground)
+3. Check server logs
 
 ### ChromaDB errors
 ```bash
-# Check if ChromaDB is running
 curl http://localhost:8001/api/v2/heartbeat
+```
+
+## Running Tests
+
+```bash
+cd mcp-server
+source .venv/bin/activate
+
+# Unit + Integration tests
+PYTHONPATH=src pytest tests/unit ../../tests/v6 -v
+
+# E2E tests (requires running Docker)
+MCP_URL="http://localhost:3001/mcp/" PYTHONPATH=src pytest ../../tests/v6/e2e/ --run-e2e -v
 ```

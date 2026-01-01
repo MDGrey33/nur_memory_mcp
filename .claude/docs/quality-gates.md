@@ -117,13 +117,13 @@ curl http://localhost:3001/health | grep '"status":"ok"'
 # 2. Port consistency
 grep CHROMA_PORT .env  # Must match docker-compose
 
-# 3. Tool count (v2 = 12 tools)
+# 3. Tool count (V6 = 4 tools: remember, recall, forget, status)
 curl -X POST http://localhost:3001/mcp/ \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 
 # 4. Real tool execution
-# Execute memory_store, artifact_ingest, hybrid_search with REAL services
+# Execute remember, recall, forget, status with REAL services
 ```
 
 **Pass Criteria**: ALL checks pass with REAL services (no mocks)
