@@ -36,8 +36,7 @@ NC='\033[0m' # No Color
 ENVIRONMENT=""
 REMOVE_VOLUMES=false
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-DEPLOYMENT_DIR="$PROJECT_ROOT/deployment"
+DEPLOYMENT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ==============================================================================
 # Functions
@@ -58,7 +57,7 @@ log_error() {
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            test|staging|prod)
+            dev|prod)
                 ENVIRONMENT="$1"
                 ;;
             -v|--volumes)
@@ -68,7 +67,7 @@ parse_args() {
                 echo "Usage: $0 [environment] [--volumes]"
                 echo ""
                 echo "Arguments:"
-                echo "  environment   test, staging, or prod (default: test)"
+                echo "  environment   dev or prod (default: dev)"
                 echo "  --volumes     Remove volumes (data)"
                 exit 0
                 ;;
@@ -82,17 +81,18 @@ parse_args() {
 
     # Default environment
     if [[ -z "$ENVIRONMENT" ]]; then
-        ENVIRONMENT="test"
+        ENVIRONMENT="dev"
     fi
 }
 
 validate_environment() {
     case "$ENVIRONMENT" in
-        test|staging|prod)
+        dev|prod)
             log_info "Target environment: $ENVIRONMENT"
             ;;
         *)
             log_error "Invalid environment: $ENVIRONMENT"
+            echo "Valid options: dev, prod"
             exit 1
             ;;
     esac
@@ -100,11 +100,8 @@ validate_environment() {
 
 get_compose_file() {
     case "$ENVIRONMENT" in
-        test)
-            echo "$DEPLOYMENT_DIR/docker-compose.test.yml"
-            ;;
-        staging)
-            echo "$DEPLOYMENT_DIR/docker-compose.staging.yml"
+        dev)
+            echo "$DEPLOYMENT_DIR/docker-compose.local.yml"
             ;;
         prod)
             echo "$DEPLOYMENT_DIR/docker-compose.yml"
@@ -133,21 +130,23 @@ stop_services() {
 
     log_info "Stopping services..."
 
-    local cmd="docker compose -f $compose_file -p $project_name"
-
-    if [[ -n "$env_file" ]]; then
-        cmd="$cmd --env-file $env_file"
-    fi
-
     cd "$DEPLOYMENT_DIR"
 
-    local down_args="down"
-    if [[ "$REMOVE_VOLUMES" == "true" ]]; then
-        log_warn "Removing volumes (data will be deleted)"
-        down_args="down -v"
+    # Build command array to handle paths with spaces
+    local -a cmd=(docker compose -f "$compose_file" -p "$project_name")
+
+    if [[ -n "$env_file" ]]; then
+        cmd+=(--env-file "$env_file")
     fi
 
-    if ! $cmd $down_args; then
+    if [[ "$REMOVE_VOLUMES" == "true" ]]; then
+        log_warn "Removing volumes (data will be deleted)"
+        cmd+=(down -v)
+    else
+        cmd+=(down)
+    fi
+
+    if ! "${cmd[@]}"; then
         log_error "Failed to stop Docker Compose services"
         exit 2
     fi

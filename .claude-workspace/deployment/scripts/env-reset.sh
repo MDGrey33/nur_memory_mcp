@@ -35,7 +35,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Default values
-ENVIRONMENT="${1:-test}"
+ENVIRONMENT="${1:-dev}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOYMENT_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$DEPLOYMENT_DIR")"
@@ -44,22 +44,19 @@ HEALTH_TIMEOUT=120
 # Port lookup functions (bash 3.x compatible)
 get_mcp_port() {
     case "$1" in
-        test) echo 3201 ;;
-        staging) echo 3101 ;;
+        dev) echo 3001 ;;
     esac
 }
 
 get_chroma_port() {
     case "$1" in
-        test) echo 8201 ;;
-        staging) echo 8101 ;;
+        dev) echo 8001 ;;
     esac
 }
 
 get_postgres_port() {
     case "$1" in
-        test) echo 5632 ;;
-        staging) echo 5532 ;;
+        dev) echo 5432 ;;
     esac
 }
 
@@ -81,7 +78,7 @@ log_error() {
 
 validate_environment() {
     case "$ENVIRONMENT" in
-        test|staging)
+        dev)
             log_info "Target environment: $ENVIRONMENT"
             ;;
         prod|production)
@@ -92,7 +89,7 @@ validate_environment() {
             ;;
         *)
             log_error "Invalid environment: $ENVIRONMENT"
-            echo "Valid options: test, staging"
+            echo "Valid options: dev (prod cannot be reset via script)"
             exit 1
             ;;
     esac
@@ -113,11 +110,8 @@ confirm_reset() {
 
 get_compose_file() {
     case "$ENVIRONMENT" in
-        test)
-            echo "$DEPLOYMENT_DIR/docker-compose.test.yml"
-            ;;
-        staging)
-            echo "$DEPLOYMENT_DIR/docker-compose.staging.yml"
+        dev)
+            echo "$DEPLOYMENT_DIR/docker-compose.local.yml"
             ;;
     esac
 }
@@ -138,16 +132,17 @@ stop_and_remove() {
 
     log_info "Stopping services and removing volumes..."
 
-    local cmd="docker compose -f $compose_file -p $project_name"
-
-    if [[ -n "$env_file" ]]; then
-        cmd="$cmd --env-file $env_file"
-    fi
-
     cd "$DEPLOYMENT_DIR"
 
+    # Build command array to handle paths with spaces
+    local -a cmd=(docker compose -f "$compose_file" -p "$project_name")
+
+    if [[ -n "$env_file" ]]; then
+        cmd+=(--env-file "$env_file")
+    fi
+
     # Stop and remove volumes
-    $cmd down -v --remove-orphans 2>/dev/null || true
+    "${cmd[@]}" down -v --remove-orphans 2>/dev/null || true
 
     log_info "Services stopped and volumes removed"
 }
@@ -159,15 +154,18 @@ start_services() {
 
     log_info "Starting fresh services..."
 
-    local cmd="docker compose -f $compose_file -p $project_name"
-
-    if [[ -n "$env_file" ]]; then
-        cmd="$cmd --env-file $env_file"
-    fi
-
     cd "$DEPLOYMENT_DIR"
 
-    if ! $cmd up -d; then
+    # Build command array to handle paths with spaces
+    local -a cmd=(docker compose -f "$compose_file" -p "$project_name")
+
+    if [[ -n "$env_file" ]]; then
+        cmd+=(--env-file "$env_file")
+    fi
+
+    cmd+=(up -d)
+
+    if ! "${cmd[@]}"; then
         log_error "Failed to start Docker Compose services"
         exit 2
     fi
