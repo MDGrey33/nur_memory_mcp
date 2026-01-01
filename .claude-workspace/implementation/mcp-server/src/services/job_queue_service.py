@@ -428,7 +428,7 @@ class JobQueueService:
         extraction_run_id: UUID,
         events: List[Dict[str, Any]],
         entity_event_map: Dict[str, List[Dict[str, Any]]] = None,
-        enqueue_graph_upsert: bool = True
+        enqueue_graph_upsert: bool = False  # V5: Disabled - AGE graph removed
     ) -> None:
         """
         Write events with V4 entity relationships (replace-on-success).
@@ -436,7 +436,7 @@ class JobQueueService:
         This extended version:
         1. Writes events and evidence (V3)
         2. Writes event_actor and event_subject relationships (V4)
-        3. Optionally enqueues graph_upsert job (V4)
+        3. Optionally enqueues graph_upsert job (V4) - DISABLED in V5
 
         Args:
             artifact_uid: Artifact UID
@@ -444,7 +444,7 @@ class JobQueueService:
             extraction_run_id: Job ID for traceability
             events: List of extracted events with evidence
             entity_event_map: Map of event index -> list of {entity_id, role, is_actor}
-            enqueue_graph_upsert: Whether to enqueue graph materialization job
+            enqueue_graph_upsert: Whether to enqueue graph materialization job (V5: disabled)
         """
         entity_event_map = entity_event_map or {}
 

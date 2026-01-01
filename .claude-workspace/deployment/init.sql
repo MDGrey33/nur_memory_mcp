@@ -28,7 +28,10 @@ CREATE TABLE IF NOT EXISTS artifact_revision (
     artifact_id TEXT NOT NULL,  -- Chroma ID (e.g., art_9f2c)
 
     -- Artifact Metadata
-    artifact_type TEXT NOT NULL CHECK (artifact_type IN ('email', 'doc', 'chat', 'transcript', 'note')),
+    artifact_type TEXT NOT NULL CHECK (artifact_type IN (
+        'email', 'doc', 'chat', 'transcript', 'note',
+        'meeting', 'document', 'preference', 'fact', 'decision', 'project', 'conversation'
+    )),
     source_system TEXT NOT NULL,
     source_id TEXT NOT NULL,
     source_ts TIMESTAMPTZ NULL,
@@ -243,12 +246,93 @@ EXECUTE FUNCTION update_updated_at_column();
 \echo 'Triggers created successfully'
 
 -- ============================================================================
--- SECTION 7: Verify Installation
+-- SECTION 7: Entity Tables (V4/V5)
+-- ============================================================================
+
+-- Enable pgvector extension for entity embeddings
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- entity - Canonical entity registry with embedding support
+CREATE TABLE IF NOT EXISTS entity (
+    entity_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    entity_type TEXT NOT NULL CHECK (entity_type IN (
+        'person', 'org', 'project', 'object', 'place', 'other'
+    )),
+    canonical_name TEXT NOT NULL,
+    normalized_name TEXT NOT NULL,
+    role TEXT,
+    organization TEXT,
+    email TEXT,
+    context_embedding vector(3072),
+    first_seen_artifact_uid TEXT NOT NULL,
+    first_seen_revision_id TEXT NOT NULL,
+    needs_review BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS entity_type_name_idx ON entity(entity_type, normalized_name);
+-- Note: entity_embedding index skipped - pgvector has 2000 dim limit, we use 3072
+-- Entity dedup uses normalized_name lookup + embedding comparison in application code
+CREATE INDEX IF NOT EXISTS entity_needs_review_idx ON entity(needs_review)
+    WHERE needs_review = true;
+
+-- entity_alias - Known aliases for each entity
+CREATE TABLE IF NOT EXISTS entity_alias (
+    alias_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    entity_id UUID NOT NULL REFERENCES entity(entity_id) ON DELETE CASCADE,
+    alias TEXT NOT NULL,
+    normalized_alias TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(entity_id, normalized_alias)
+);
+
+CREATE INDEX IF NOT EXISTS entity_alias_lookup_idx ON entity_alias(normalized_alias);
+
+-- entity_mention - Every surface form occurrence
+CREATE TABLE IF NOT EXISTS entity_mention (
+    mention_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    entity_id UUID NOT NULL REFERENCES entity(entity_id) ON DELETE CASCADE,
+    artifact_uid TEXT NOT NULL,
+    revision_id TEXT NOT NULL,
+    surface_form TEXT NOT NULL,
+    start_char INT,
+    end_char INT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS entity_mention_entity_idx ON entity_mention(entity_id);
+CREATE INDEX IF NOT EXISTS entity_mention_revision_idx ON entity_mention(artifact_uid, revision_id);
+
+-- event_actor - Structured actor relationships
+CREATE TABLE IF NOT EXISTS event_actor (
+    event_id UUID NOT NULL REFERENCES semantic_event(event_id) ON DELETE CASCADE,
+    entity_id UUID NOT NULL REFERENCES entity(entity_id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN (
+        'owner', 'contributor', 'reviewer', 'stakeholder', 'other'
+    )),
+    PRIMARY KEY (event_id, entity_id)
+);
+
+CREATE INDEX IF NOT EXISTS event_actor_entity_idx ON event_actor(entity_id);
+
+-- event_subject - Structured subject relationships
+CREATE TABLE IF NOT EXISTS event_subject (
+    event_id UUID NOT NULL REFERENCES semantic_event(event_id) ON DELETE CASCADE,
+    entity_id UUID NOT NULL REFERENCES entity(entity_id) ON DELETE CASCADE,
+    PRIMARY KEY (event_id, entity_id)
+);
+
+CREATE INDEX IF NOT EXISTS event_subject_entity_idx ON event_subject(entity_id);
+
+\echo 'Entity tables created successfully'
+
+-- ============================================================================
+-- SECTION 8: Verify Installation
 -- ============================================================================
 
 \echo ''
 \echo '========================================='
-\echo 'MCP Memory Server V3 Database Initialized'
+\echo 'MCP Memory Server V5 Database Initialized'
 \echo '========================================='
 \echo ''
 
@@ -271,7 +355,22 @@ UNION ALL
 SELECT
     'event_evidence' AS table_name,
     COUNT(*) AS row_count
-FROM event_evidence;
+FROM event_evidence
+UNION ALL
+SELECT
+    'entity' AS table_name,
+    COUNT(*) AS row_count
+FROM entity
+UNION ALL
+SELECT
+    'event_actor' AS table_name,
+    COUNT(*) AS row_count
+FROM event_actor
+UNION ALL
+SELECT
+    'event_subject' AS table_name,
+    COUNT(*) AS row_count
+FROM event_subject;
 
 \echo ''
 \echo 'Database ready for use!'

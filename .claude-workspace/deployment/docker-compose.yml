@@ -1,19 +1,37 @@
-version: '3.8'
+# =============================================================================
+# MCP Memory Server V5 - Docker Compose Configuration
+# =============================================================================
+#
+# V5 Features:
+# - 4 new tools: remember(), recall(), forget(), status()
+# - Unified content storage (content + chunks collections)
+# - Content-based ID generation (art_ + SHA256[:12])
+# - Idempotent deduplication by content hash
+# - Graph expansion via Postgres joins (no AGE dependency)
+#
+# Usage:
+#   docker compose up -d
+#   docker compose ps
+#   docker compose logs -f mcp-server
+#
+# =============================================================================
 
 services:
+  # ===========================================================================
   # ChromaDB - Vector database for embeddings
+  # ===========================================================================
   chroma:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:0.5.23
     container_name: mcp-chroma
     ports:
-      - "8001:8000"  # External:Internal
+      - "${CHROMA_EXTERNAL_PORT:-8001}:8000"  # External:Internal
     volumes:
       - chroma_data:/chroma/chroma
     environment:
       - IS_PERSISTENT=TRUE
       - ANONYMIZED_TELEMETRY=FALSE
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8000/api/v2/heartbeat"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v2/heartbeat', timeout=5)"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -30,12 +48,14 @@ services:
           memory: 512M
           cpus: '0.25'
 
-  # PostgreSQL - Events database and job queue
+  # ===========================================================================
+  # PostgreSQL - Events database, job queue, and graph storage
+  # ===========================================================================
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: mcp-postgres
     ports:
-      - "5432:5432"
+      - "${POSTGRES_EXTERNAL_PORT:-5432}:5432"
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-events}
       - POSTGRES_USER=${POSTGRES_USER:-events}
@@ -43,6 +63,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ../implementation/mcp-server/migrations:/docker-entrypoint-initdb.d/migrations:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-events} -d ${POSTGRES_DB:-events}"]
       interval: 10s
@@ -61,20 +82,25 @@ services:
           memory: 256M
           cpus: '0.1'
 
-  # MCP Memory Server - HTTP Transport
+  # ===========================================================================
+  # MCP Memory Server V5 - HTTP Transport
+  # ===========================================================================
   mcp-server:
     build:
       context: ../implementation/mcp-server
       dockerfile: Dockerfile
-    image: mcp-memory-server:v3
+    image: mcp-memory-server:v5
     container_name: mcp-server
     ports:
-      - "3000:3000"
+      - "${MCP_PORT:-3000}:3000"
     environment:
       # OpenAI Configuration
       - OPENAI_API_KEY=${OPENAI_API_KEY:?OPENAI_API_KEY is required}
       - OPENAI_EMBED_MODEL=${OPENAI_EMBED_MODEL:-text-embedding-3-large}
+      - OPENAI_EMBED_DIMS=${OPENAI_EMBED_DIMS:-3072}
       - OPENAI_EVENT_MODEL=${OPENAI_EVENT_MODEL:-gpt-4o-mini}
+      - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-30}
+      - OPENAI_MAX_RETRIES=${OPENAI_MAX_RETRIES:-3}
 
       # ChromaDB Configuration
       - CHROMA_HOST=chroma
@@ -82,10 +108,32 @@ services:
 
       # PostgreSQL Configuration
       - EVENTS_DB_DSN=${EVENTS_DB_DSN:-postgresql://events:events@postgres:5432/events}
+      - PG_POOL_SIZE=${PG_POOL_SIZE:-10}
+      - PG_POOL_MAX_OVERFLOW=${PG_POOL_MAX_OVERFLOW:-20}
 
       # Server Configuration
       - MCP_PORT=3000
+      - ENVIRONMENT=${ENVIRONMENT:-development}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - JSON_LOGGING=${JSON_LOGGING:-true}
+
+      # V5 Configuration
+      - V5_EVENT_EXTRACTION_MIN_TOKENS=${V5_EVENT_EXTRACTION_MIN_TOKENS:-100}
+
+      # Graph Expansion Configuration (V5 uses Postgres joins, no AGE)
+      - GRAPH_BUDGET_DEFAULT=${GRAPH_BUDGET_DEFAULT:-10}
+      - GRAPH_BUDGET_MAX=${GRAPH_BUDGET_MAX:-100}
+      - GRAPH_SEED_LIMIT_DEFAULT=${GRAPH_SEED_LIMIT_DEFAULT:-5}
+      - GRAPH_SEED_LIMIT_MAX=${GRAPH_SEED_LIMIT_MAX:-20}
+
+      # Entity Resolution
+      - ENTITY_SIMILARITY_THRESHOLD=${ENTITY_SIMILARITY_THRESHOLD:-0.85}
+      - ENTITY_MAX_CANDIDATES=${ENTITY_MAX_CANDIDATES:-5}
+      - ENTITY_DEDUP_MODEL=${ENTITY_DEDUP_MODEL:-gpt-4o-mini}
+
+      # Monitoring
+      - METRICS_ENABLED=${METRICS_ENABLED:-true}
+      - METRICS_PORT=${METRICS_PORT:-9090}
     volumes:
       - ./healthcheck.py:/app/healthcheck.py:ro
     healthcheck:
@@ -111,18 +159,22 @@ services:
           memory: 512M
           cpus: '0.25'
 
-  # Event Worker - Async event extraction
+  # ===========================================================================
+  # Event Worker - Async event extraction and graph updates
+  # ===========================================================================
   event-worker:
     build:
       context: ../implementation/mcp-server
       dockerfile: Dockerfile
-    image: mcp-memory-server:v3
+    image: mcp-memory-server:v5
     container_name: mcp-event-worker
     command: python -m src.worker
     environment:
       # OpenAI Configuration
       - OPENAI_API_KEY=${OPENAI_API_KEY:?OPENAI_API_KEY is required}
       - OPENAI_EVENT_MODEL=${OPENAI_EVENT_MODEL:-gpt-4o-mini}
+      - OPENAI_EMBED_MODEL=${OPENAI_EMBED_MODEL:-text-embedding-3-large}
+      - OPENAI_EMBED_DIMS=${OPENAI_EMBED_DIMS:-3072}
 
       # ChromaDB Configuration
       - CHROMA_HOST=chroma
@@ -130,14 +182,25 @@ services:
 
       # PostgreSQL Configuration
       - EVENTS_DB_DSN=${EVENTS_DB_DSN:-postgresql://events:events@postgres:5432/events}
+      - PG_POOL_SIZE=${PG_POOL_SIZE:-10}
+      - PG_POOL_MAX_OVERFLOW=${PG_POOL_MAX_OVERFLOW:-20}
 
       # Worker Configuration
       - WORKER_ID=${WORKER_ID:-worker-1}
       - POLL_INTERVAL_MS=${POLL_INTERVAL_MS:-1000}
       - EVENT_MAX_ATTEMPTS=${EVENT_MAX_ATTEMPTS:-5}
 
+      # V5 Worker Configuration (graph_upsert disabled - uses Postgres joins)
+      - V5_EVENT_EXTRACTION_MIN_TOKENS=${V5_EVENT_EXTRACTION_MIN_TOKENS:-100}
+
+      # Entity Resolution
+      - ENTITY_SIMILARITY_THRESHOLD=${ENTITY_SIMILARITY_THRESHOLD:-0.85}
+      - ENTITY_MAX_CANDIDATES=${ENTITY_MAX_CANDIDATES:-5}
+      - ENTITY_DEDUP_MODEL=${ENTITY_DEDUP_MODEL:-gpt-4o-mini}
+
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - JSON_LOGGING=${JSON_LOGGING:-true}
     volumes:
       - ./healthcheck.py:/app/healthcheck.py:ro
     healthcheck:
@@ -165,12 +228,18 @@ services:
           memory: 512M
           cpus: '0.25'
 
+# =============================================================================
+# Volumes
+# =============================================================================
 volumes:
   chroma_data:
     driver: local
   postgres_data:
     driver: local
 
+# =============================================================================
+# Networks
+# =============================================================================
 networks:
   mcp-network:
     driver: bridge

@@ -1,9 +1,17 @@
 """
-MCP Memory Server v4.0 - Streamable HTTP Transport
+MCP Memory Server v5.0 - Streamable HTTP Transport
 
 A Model Context Protocol server that provides persistent memory and artifact storage
 with OpenAI embeddings, token-window chunking, hybrid retrieval, semantic event extraction,
 and graph-backed context expansion.
+
+V5 Features (Simplified Interface):
+- 4 new tools: remember(), recall(), forget(), status()
+- Unified content storage (content + chunks collections)
+- Content-based ID generation (art_ + SHA256[:12])
+- Idempotent deduplication by content hash
+- Conversation turn event gating (< 100 tokens skip extraction)
+- Graph expansion via Postgres joins (no AGE dependency)
 
 V4 Features:
 - Graph-backed context expansion (Apache AGE)
@@ -23,7 +31,7 @@ Configuration via .env file (see .env.example)
 """
 
 # Version and build info
-__version__ = "4.0.0"
+__version__ = "5.0.0-alpha"
 
 import os
 import logging
@@ -31,7 +39,7 @@ import hashlib
 from datetime import datetime, date
 from uuid import uuid4
 from contextlib import asynccontextmanager
-from typing import Optional, List
+from typing import Optional, List, Any
 
 import uvicorn
 from starlette.applications import Starlette
@@ -61,7 +69,13 @@ from storage.collections import (
     get_artifact_chunks_collection,
     get_artifact_by_source,
     get_chunks_by_artifact,
-    delete_artifact_cascade
+    delete_artifact_cascade,
+    # V5 collections
+    get_content_collection,
+    get_chunks_collection,
+    get_content_by_id,
+    get_v5_chunks_by_content,
+    delete_v5_content_cascade
 )
 from storage.models import Chunk
 from utils.errors import (
@@ -76,8 +90,9 @@ from storage.postgres_client import PostgresClient
 from services.job_queue_service import JobQueueService
 from tools.event_tools import event_search, event_get, event_list_for_revision
 
-# V4: Graph service import
-from services.graph_service import GraphService
+# V5: GraphService import removed - graph expansion uses Postgres SQL joins
+# Legacy import commented out for reference:
+# from services.graph_service import GraphService
 
 # Setup logging
 logger = logging.getLogger("mcp-memory")
@@ -160,8 +175,8 @@ chroma_manager: Optional[ChromaClientManager] = None
 pg_client: Optional[PostgresClient] = None
 job_queue_service: Optional[JobQueueService] = None
 
-# V4: Graph service
-graph_service: Optional[GraphService] = None
+# V5: Graph service disabled (graph expansion uses Postgres SQL joins)
+graph_service: Optional[Any] = None  # Legacy type, kept for backward compatibility
 
 
 # ============================================================================
@@ -1534,6 +1549,872 @@ async def job_status(
 
 
 # ============================================================================
+# V5 TOOLS - Simplified Interface
+# ============================================================================
+
+# Valid context types for V5 remember()
+V5_VALID_CONTEXTS = [
+    # Document types (chunked, full extraction)
+    "meeting",      # Meeting notes
+    "email",        # Email content
+    "document",     # General documents
+    "chat",         # Chat logs
+    "transcript",   # Transcripts
+    "note",         # Notes (can be small or large)
+    # Memory types (small, single-chunk)
+    "preference",   # User preferences
+    "fact",         # Known facts
+    "decision",     # Decisions made
+    "project",      # Project information
+    # Conversation (timestamped turns)
+    "conversation", # Conversation turns
+]
+
+
+@mcp.tool()
+async def remember(
+    content: str,
+    context: Optional[str] = None,
+    source: Optional[str] = None,
+    importance: float = 0.5,
+    title: Optional[str] = None,
+    author: Optional[str] = None,
+    participants: Optional[List[str]] = None,
+    date: Optional[str] = None,
+    # Conversation tracking
+    conversation_id: Optional[str] = None,
+    turn_index: Optional[int] = None,
+    role: Optional[str] = None,
+    # Advanced metadata
+    sensitivity: str = "normal",
+    visibility_scope: str = "me",
+    retention_policy: str = "forever",
+    source_id: Optional[str] = None,
+    source_url: Optional[str] = None,
+    # Source metadata for credibility reasoning
+    document_date: Optional[str] = None,
+    source_type: Optional[str] = None,
+    document_status: Optional[str] = None,
+    author_title: Optional[str] = None,
+    distribution_scope: Optional[str] = None,
+) -> dict:
+    """
+    Store content for long-term recall.
+
+    Everything stored is automatically:
+    - Chunked if large (>900 tokens)
+    - Embedded for semantic search
+    - Analyzed for events (decisions, commitments, etc.)
+    - Added to the knowledge graph
+
+    Args:
+        content: What to remember (text, up to 10MB)
+        context: Type of content (meeting, email, note, preference, fact, conversation)
+        source: Where it came from (gmail, slack, manual, user)
+        importance: Priority for retrieval (0.0-1.0)
+        title: Optional title/subject
+        author: Who created it
+        participants: People involved
+        date: When it happened (ISO8601)
+        conversation_id: Conversation identifier (required for context="conversation")
+        turn_index: Turn number in conversation (required for context="conversation")
+        role: Speaker role in conversation (user, assistant, system)
+        sensitivity: Privacy level (normal, sensitive, highly_sensitive)
+        visibility_scope: Who can see (me, team, org, custom)
+        retention_policy: How long to keep (forever, 1y, until_resolved, custom)
+        source_id: Unique ID in source system (for deduplication)
+        source_url: Link to original document
+
+    Returns:
+        {id, summary, events_queued, context}
+
+    Examples:
+        remember("User prefers dark mode")
+        remember("Meeting notes...", context="meeting", source="slack")
+        remember(email_body, context="email", author="alice@example.com")
+        remember("Hello!", context="conversation", conversation_id="conv_123", turn_index=0, role="user")
+    """
+    try:
+        # Validate content
+        if not content or len(content) > 10000000:
+            return {"error": "Content must be between 1 and 10,000,000 characters"}
+
+        # Validate context
+        if context and context not in V5_VALID_CONTEXTS:
+            return {"error": f"Invalid context '{context}'. Must be one of: {', '.join(V5_VALID_CONTEXTS)}"}
+
+        # Default context
+        if not context:
+            context = "note"
+
+        # Validate conversation requirements
+        if context == "conversation":
+            if conversation_id is None or turn_index is None:
+                return {"error": "context='conversation' requires conversation_id and turn_index"}
+            if role and role not in ["user", "assistant", "system"]:
+                return {"error": f"Invalid role '{role}'. Must be one of: user, assistant, system"}
+
+        # Validate importance
+        if not 0.0 <= importance <= 1.0:
+            return {"error": "importance must be between 0.0 and 1.0"}
+
+        # Validate sensitivity
+        if sensitivity not in ["normal", "sensitive", "highly_sensitive"]:
+            return {"error": f"Invalid sensitivity '{sensitivity}'"}
+
+        # Validate visibility_scope
+        if visibility_scope not in ["me", "team", "org", "custom"]:
+            return {"error": f"Invalid visibility_scope '{visibility_scope}'"}
+
+        # Generate content-based ID: art_ + SHA256(content)[:12]
+        content_hash = hashlib.sha256(content.encode()).hexdigest()[:12]
+        artifact_id = f"art_{content_hash}"
+
+        # Check for existing content (idempotent deduplication)
+        client = chroma_manager.get_client()
+        existing = get_content_by_id(client, artifact_id)
+
+        if existing:
+            # Same content already exists - upsert metadata
+            logger.info(f"V5 remember: Content {artifact_id} already exists, upserting metadata")
+            content_col = get_content_collection(client)
+
+            # Merge metadata
+            existing_meta = existing.get("metadata", {})
+            updated_meta = {
+                **existing_meta,
+                "ingested_at": datetime.utcnow().isoformat() + "Z",
+                "importance": importance,
+            }
+            if title:
+                updated_meta["title"] = title
+            if author:
+                updated_meta["author"] = author
+            if source:
+                updated_meta["source_system"] = source
+
+            content_col.update(
+                ids=[artifact_id],
+                metadatas=[updated_meta]
+            )
+
+            return {
+                "id": artifact_id,
+                "summary": f"Updated existing content ({context})",
+                "events_queued": False,
+                "context": context,
+                "status": "unchanged"
+            }
+
+        # Generate embedding
+        embedding = embedding_service.generate_embedding(content)
+
+        # Count tokens for chunking decision
+        token_count = chunking_service.count_tokens(content)
+
+        # Build metadata
+        metadata = {
+            "context": context,
+            "source_system": source or "manual",
+            "importance": importance,
+            "sensitivity": sensitivity,
+            "visibility_scope": visibility_scope,
+            "retention_policy": retention_policy,
+            "ingested_at": datetime.utcnow().isoformat() + "Z",
+            "token_count": token_count,
+            "content_hash": content_hash,
+            "embedding_provider": "openai",
+            "embedding_model": config.openai_embed_model,
+            "embedding_dimensions": config.openai_embed_dims,
+        }
+
+        # Add optional fields
+        if title:
+            metadata["title"] = title
+        if author:
+            metadata["author"] = author
+        if participants:
+            metadata["participants"] = ",".join(participants)
+        if date:
+            metadata["ts"] = date
+        if source_id:
+            metadata["source_id"] = source_id
+        if source_url:
+            metadata["source_url"] = source_url
+        if document_date:
+            metadata["document_date"] = document_date
+        if source_type:
+            metadata["source_type"] = source_type
+        if document_status:
+            metadata["document_status"] = document_status
+        if author_title:
+            metadata["author_title"] = author_title
+        if distribution_scope:
+            metadata["distribution_scope"] = distribution_scope
+
+        # Conversation-specific metadata
+        if context == "conversation":
+            metadata["conversation_id"] = conversation_id
+            metadata["turn_index"] = turn_index
+            if role:
+                metadata["role"] = role
+
+        # Chunk if needed (use ChunkingService threshold, default 1200 tokens)
+        should_chunk_result, _ = chunking_service.should_chunk(content)
+        is_chunked = should_chunk_result
+        num_chunks = 0
+
+        if is_chunked:
+            # Chunk the content
+            chunks = chunking_service.chunk_text(content, artifact_id)
+            num_chunks = len(chunks)
+
+            # Store each chunk in V5 chunks collection with full metadata
+            # Including start_char/end_char for evidence pipeline
+            chunks_col = get_chunks_collection(client)
+            for chunk in chunks:
+                # Use stable chunk_id from ChunkingService (includes content hash)
+                chunk_embedding = embedding_service.generate_embedding(chunk.content)
+                chunks_col.add(
+                    ids=[chunk.chunk_id],
+                    documents=[chunk.content],
+                    metadatas=[{
+                        "content_id": artifact_id,
+                        "chunk_index": chunk.chunk_index,
+                        "total_chunks": num_chunks,
+                        "token_count": chunk.token_count,
+                        "start_char": chunk.start_char,
+                        "end_char": chunk.end_char,
+                        "content_hash": chunk.content_hash,
+                    }],
+                    embeddings=[chunk_embedding]
+                )
+
+            metadata["is_chunked"] = True
+            metadata["num_chunks"] = num_chunks
+            logger.info(f"V5 remember: Chunked content {artifact_id} into {num_chunks} chunks")
+        else:
+            metadata["is_chunked"] = False
+            metadata["num_chunks"] = 0
+
+        # Store main content in V5 content collection
+        content_col = get_content_collection(client)
+        content_col.add(
+            ids=[artifact_id],
+            documents=[content],
+            metadatas=[metadata],
+            embeddings=[embedding]
+        )
+
+        # Queue event extraction (Decision 1: Semantic Unification)
+        # Exception: Short conversation turns < 100 tokens skip extraction
+        events_queued = False
+        job_id = None
+
+        should_extract = True
+        if context == "conversation" and token_count < 100:
+            should_extract = False
+            logger.info(f"V5 remember: Skipping event extraction for short conversation turn ({token_count} tokens)")
+
+        if should_extract and pg_client and job_queue_service:
+            try:
+                # Create artifact_uid and revision_id for Postgres
+                artifact_uid = f"uid_{content_hash}"
+                revision_id = f"rev_{content_hash}"
+
+                # Write to Postgres artifact_revision
+                await pg_client.transaction([
+                    (
+                        "UPDATE artifact_revision SET is_latest = false WHERE artifact_uid = $1 AND is_latest = true",
+                        (artifact_uid,)
+                    ),
+                    (
+                        """INSERT INTO artifact_revision
+                           (artifact_uid, revision_id, artifact_id, artifact_type, source_system, source_id, content_hash, token_count, is_chunked, chunk_count)
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                           ON CONFLICT (artifact_uid, revision_id) DO NOTHING""",
+                        (
+                            artifact_uid,
+                            revision_id,
+                            artifact_id,
+                            context,  # Use context as artifact_type
+                            source or "manual",
+                            source_id or "",
+                            content_hash,
+                            token_count,
+                            is_chunked,
+                            num_chunks,
+                        )
+                    )
+                ])
+
+                # Enqueue event extraction job
+                job_uuid = await job_queue_service.enqueue_job(artifact_uid, revision_id)
+                if job_uuid:
+                    job_id = str(job_uuid)
+                    events_queued = True
+                    logger.info(f"V5 remember: Enqueued extraction job {job_id} for {artifact_id}")
+
+            except Exception as e:
+                logger.warning(f"V5 remember: Failed to queue event extraction: {e}")
+
+        # Generate summary
+        summary = content[:100] + "..." if len(content) > 100 else content
+
+        logger.info(f"V5 remember: Stored {artifact_id} ({context}, {token_count} tokens, chunked={is_chunked})")
+
+        return {
+            "id": artifact_id,
+            "summary": summary,
+            "events_queued": events_queued,
+            "context": context,
+            "is_chunked": is_chunked,
+            "num_chunks": num_chunks,
+            "token_count": token_count
+        }
+
+    except ValidationError as e:
+        return {"error": f"Validation error: {e}"}
+    except EmbeddingError as e:
+        return {"error": f"Embedding error: {e}"}
+    except Exception as e:
+        logger.error(f"V5 remember error: {e}", exc_info=True)
+        return {"error": f"Internal server error: {str(e)}"}
+
+
+@mcp.tool()
+async def recall(
+    query: Optional[str] = None,
+    id: Optional[str] = None,
+    context: Optional[str] = None,
+    limit: int = 10,
+    expand: bool = True,
+    include_events: bool = True,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    conversation_id: Optional[str] = None,
+    # Advanced graph parameters
+    graph_budget: int = 10,
+    graph_filters: Optional[List[str]] = None,
+    include_entities: bool = True,
+    expand_neighbors: bool = False,
+    # Filtering
+    min_importance: float = 0.0,
+    source: Optional[str] = None,
+    sensitivity: Optional[str] = None,
+) -> dict:
+    """
+    Find and retrieve stored content.
+
+    Can search semantically, get by ID, or list with filters.
+    By default, includes related context from the knowledge graph.
+
+    Args:
+        query: What to search for (natural language)
+        id: Specific content ID to retrieve
+        context: Filter by type (meeting, email, preference, etc.)
+        limit: Maximum results (default 10)
+        expand: Include related content via graph (default True)
+        include_events: Include extracted events (default True)
+        date_from: Filter by date range start
+        date_to: Filter by date range end
+        conversation_id: Get specific conversation history
+        graph_budget: Max related items from graph expansion (1-50)
+        graph_filters: Event categories for graph expansion
+        include_entities: Include entity information in response
+        expand_neighbors: Include +/-1 adjacent chunks for context
+        min_importance: Minimum importance threshold (0.0-1.0)
+        source: Filter by source system
+        sensitivity: Filter by sensitivity level
+
+    Returns:
+        {
+            results: [...],           # Primary matches
+            related: [...],           # Graph-expanded context
+            entities: [...],          # People/things mentioned
+            total_count: int
+        }
+
+    Examples:
+        recall("user preferences")
+        recall(id="art_abc123")
+        recall(context="meeting", limit=5)
+        recall("what did Alice decide?", expand=True)
+        recall(conversation_id="conv_123", limit=20)
+    """
+    try:
+        # Validate limit
+        if limit < 1 or limit > 50:
+            return {"error": "Limit must be between 1 and 50"}
+
+        client = chroma_manager.get_client()
+
+        # Direct ID lookup
+        if id:
+            # Handle event ID lookup
+            if id.startswith("evt_"):
+                if not pg_client:
+                    return {"error": "Event lookup requires PostgreSQL", "error_code": "V3_UNAVAILABLE"}
+
+                from tools.event_tools import event_get
+                event_result = await event_get(pg_client, id)
+                if "error" in event_result:
+                    return event_result
+
+                return {
+                    "results": [event_result],
+                    "related": [],
+                    "entities": [],
+                    "total_count": 1
+                }
+
+            # Handle content ID lookup (art_ only)
+            if not id.startswith("art_"):
+                return {"error": f"Invalid ID format. Use art_xxx or evt_xxx. Got: {id}"}
+
+            content_data = get_content_by_id(client, id)
+            if not content_data:
+                return {"results": [], "related": [], "entities": [], "total_count": 0}
+
+            # Get events for this content if requested
+            events = []
+            if include_events and pg_client:
+                try:
+                    content_hash = id.replace("art_", "")
+                    artifact_uid = f"uid_{content_hash}"
+
+                    event_rows = await pg_client.fetch_all(
+                        """
+                        SELECT event_id, category, narrative, confidence, event_time
+                        FROM semantic_event
+                        WHERE artifact_uid = $1
+                        ORDER BY event_time DESC
+                        LIMIT 20
+                        """,
+                        artifact_uid
+                    )
+                    for row in event_rows:
+                        events.append({
+                            "event_id": f"evt_{row['event_id']}",
+                            "category": row["category"],
+                            "narrative": row["narrative"],
+                            "confidence": float(row["confidence"]) if row["confidence"] else None,
+                            "event_time": str(row["event_time"]) if row["event_time"] else None
+                        })
+                except Exception as e:
+                    logger.warning(f"V5 recall: Failed to fetch events: {e}")
+
+            result = {
+                "id": content_data["id"],
+                "content": content_data["content"],
+                "metadata": content_data["metadata"],
+                "events": events
+            }
+
+            return {
+                "results": [result],
+                "related": [],
+                "entities": [],
+                "total_count": 1
+            }
+
+        # Conversation history retrieval (Decision 5: Structured return)
+        if conversation_id:
+            content_col = get_content_collection(client)
+
+            try:
+                results = content_col.get(
+                    where={
+                        "$and": [
+                            {"context": "conversation"},
+                            {"conversation_id": conversation_id},
+                        ]
+                    },
+                    include=["documents", "metadatas"]
+                )
+
+                turns = []
+                ids = results.get("ids", [])
+                docs = results.get("documents", [])
+                metas = results.get("metadatas", [])
+
+                for doc_id, doc, meta in zip(ids, docs, metas):
+                    turns.append({
+                        "id": doc_id,
+                        "role": meta.get("role", "user") if meta else "user",
+                        "turn_index": meta.get("turn_index", 0) if meta else 0,
+                        "ts": meta.get("ts", meta.get("ingested_at")) if meta else None,
+                        "content": doc,
+                    })
+
+                # Sort by turn_index
+                turns.sort(key=lambda t: t["turn_index"])
+
+                # Apply limit
+                if limit:
+                    turns = turns[:limit]
+
+                return {
+                    "turns": turns,
+                    "total_turns": len(turns),
+                    "conversation_id": conversation_id,
+                    "results": [],
+                    "related": [],
+                    "entities": []
+                }
+
+            except Exception as e:
+                logger.error(f"V5 recall: Failed to get conversation history: {e}")
+                return {"error": f"Failed to get conversation history: {str(e)}"}
+
+        # Semantic search
+        if query:
+            if not query or len(query) > 500:
+                return {"error": "Query must be between 1 and 500 characters"}
+
+            # Use graph_filters default if not provided
+            if graph_filters is None:
+                graph_filters = ["Decision", "Commitment", "QualityRisk"]
+
+            # V5: Use hybrid_search_v5 which searches V5 content collection
+            v5_result = await retrieval_service.hybrid_search_v5(
+                query=query,
+                limit=limit,
+                expand=expand,
+                graph_budget=graph_budget,
+                graph_filters={"categories": graph_filters} if graph_filters else None,
+                include_entities=include_entities,
+                context_filter=context,
+                min_importance=min_importance,
+            )
+
+            v4_dict = v5_result.to_dict()
+
+            # Also search semantic events if requested
+            event_results = []
+            if include_events and pg_client:
+                try:
+                    from tools.event_tools import event_search
+                    event_response = await event_search(
+                        pg_client,
+                        query=query,
+                        limit=limit,
+                        include_evidence=True
+                    )
+                    if "events" in event_response:
+                        event_results = event_response["events"]
+                except Exception as e:
+                    logger.warning(f"V5 recall: Event search failed: {e}")
+
+            # Combine results
+            primary_results = v4_dict.get("primary_results", [])
+
+            # Add events to results
+            for ev in event_results:
+                primary_results.append({
+                    "type": "event",
+                    "id": ev.get("event_id"),
+                    "category": ev.get("category"),
+                    "narrative": ev.get("narrative"),
+                    "event_time": ev.get("event_time"),
+                    "confidence": ev.get("confidence"),
+                    "evidence": ev.get("evidence", [])
+                })
+
+            return {
+                "results": primary_results,
+                "related": v4_dict.get("related_context", []) if expand else [],
+                "entities": v4_dict.get("entities", []) if include_entities else [],
+                "total_count": len(primary_results)
+            }
+
+        # No query, id, or conversation_id - return error
+        return {"error": "Must provide query, id, or conversation_id"}
+
+    except Exception as e:
+        logger.error(f"V5 recall error: {e}", exc_info=True)
+        return {"error": f"Search failed: {str(e)}"}
+
+
+@mcp.tool()
+async def forget(
+    id: str,
+    confirm: bool = False,
+) -> dict:
+    """
+    Delete stored content.
+
+    Removes content and all associated data (chunks, events, graph nodes).
+    Requires confirm=True as a safety measure.
+
+    Args:
+        id: Content ID to delete (art_xxx only)
+        confirm: Must be True to execute (safety)
+
+    Returns:
+        {deleted: bool, id: str, cascade: {chunks, events, entities}}
+
+    Examples:
+        forget(id="art_abc123", confirm=True)
+    """
+    try:
+        # Safety check
+        if not confirm:
+            return {
+                "error": "Must set confirm=True to delete",
+                "hint": "This is a safety measure. Set confirm=True to proceed with deletion."
+            }
+
+        # Validate ID format (Decision 6: Single ID Family)
+        if id.startswith("evt_"):
+            # Get source artifact for guidance (Decision 4: Guide-to-Source)
+            if pg_client:
+                try:
+                    # Extract UUID from evt_ prefix
+                    event_uuid = id.replace("evt_", "")
+                    result = await pg_client.fetch_one(
+                        "SELECT artifact_uid FROM semantic_event WHERE event_id = $1",
+                        event_uuid
+                    )
+                    if result:
+                        source_uid = result["artifact_uid"]
+                        # Convert uid_ to art_ format
+                        source_art_id = f"art_{source_uid.replace('uid_', '')}"
+                        return {
+                            "error": f"Events are derived data. Delete source artifact '{source_art_id}' instead.",
+                            "source_artifact_id": source_art_id,
+                            "deleted": False
+                        }
+                except Exception as e:
+                    logger.warning(f"V5 forget: Failed to lookup event source: {e}")
+
+            return {
+                "error": "Events are derived data. Delete the source artifact instead.",
+                "deleted": False
+            }
+
+        if not id.startswith("art_"):
+            return {"error": f"Invalid ID format. Use art_xxx. Got: {id}", "deleted": False}
+
+        client = chroma_manager.get_client()
+
+        # Check if content exists
+        existing = get_content_by_id(client, id)
+        if not existing:
+            return {"error": f"Content not found: {id}", "deleted": False}
+
+        # Delete from V5 content collection and chunks
+        chroma_deleted = delete_v5_content_cascade(client, id)
+
+        # Delete events and entities from PostgreSQL
+        events_deleted = 0
+        entities_deleted = 0
+
+        if pg_client:
+            try:
+                content_hash = id.replace("art_", "")
+                artifact_uid = f"uid_{content_hash}"
+
+                # Delete events and related data
+                # First, get event IDs for this artifact
+                event_rows = await pg_client.fetch_all(
+                    "SELECT event_id FROM semantic_event WHERE artifact_uid = $1",
+                    artifact_uid
+                )
+                event_ids = [row["event_id"] for row in event_rows]
+
+                if event_ids:
+                    # Delete event_evidence
+                    placeholders = ", ".join(f"${i+1}" for i in range(len(event_ids)))
+                    await pg_client.execute(
+                        f"DELETE FROM event_evidence WHERE event_id IN ({placeholders})",
+                        *event_ids
+                    )
+
+                    # Delete event_actor
+                    await pg_client.execute(
+                        f"DELETE FROM event_actor WHERE event_id IN ({placeholders})",
+                        *event_ids
+                    )
+
+                    # Delete event_subject
+                    await pg_client.execute(
+                        f"DELETE FROM event_subject WHERE event_id IN ({placeholders})",
+                        *event_ids
+                    )
+
+                    # Delete semantic_event
+                    result = await pg_client.execute(
+                        f"DELETE FROM semantic_event WHERE event_id IN ({placeholders})",
+                        *event_ids
+                    )
+                    events_deleted = len(event_ids)
+
+                # Delete entity_mention for this artifact
+                mention_result = await pg_client.execute(
+                    "DELETE FROM entity_mention WHERE artifact_uid = $1",
+                    artifact_uid
+                )
+
+                # Delete artifact_revision
+                await pg_client.execute(
+                    "DELETE FROM artifact_revision WHERE artifact_uid = $1",
+                    artifact_uid
+                )
+
+                # Delete event_jobs
+                await pg_client.execute(
+                    "DELETE FROM event_jobs WHERE artifact_uid = $1",
+                    artifact_uid
+                )
+
+                logger.info(f"V5 forget: Deleted Postgres data for {artifact_uid}")
+
+            except Exception as e:
+                logger.warning(f"V5 forget: Failed to delete Postgres data: {e}")
+
+        logger.info(f"V5 forget: Deleted {id} (content={chroma_deleted['content']}, chunks={chroma_deleted['chunks']}, events={events_deleted})")
+
+        return {
+            "deleted": True,
+            "id": id,
+            "cascade": {
+                "chunks": chroma_deleted["chunks"],
+                "events": events_deleted,
+                "entities": entities_deleted
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"V5 forget error: {e}", exc_info=True)
+        return {"error": f"Delete failed: {str(e)}", "deleted": False}
+
+
+@mcp.tool()
+async def status(
+    artifact_id: Optional[str] = None,
+) -> dict:
+    """
+    Get system health and statistics.
+
+    Args:
+        artifact_id: Optional - check extraction job status for specific artifact
+
+    Returns:
+        {
+            version: str,
+            environment: str,
+            healthy: bool,
+            services: {...},
+            counts: {...},
+            pending_jobs: int,
+            job_status: {...}  # Only if artifact_id provided
+        }
+    """
+    try:
+        result = {
+            "version": __version__,
+            "environment": os.getenv("ENVIRONMENT", "development"),
+            "healthy": True,
+            "services": {},
+            "counts": {},
+            "pending_jobs": 0
+        }
+
+        # ChromaDB health
+        if chroma_manager:
+            chroma_health = chroma_manager.health_check()
+            result["services"]["chromadb"] = {
+                "status": chroma_health.get("status", "unknown"),
+                "latency_ms": chroma_health.get("latency_ms"),
+                "collections": ["content", "chunks"]  # V5 collections
+            }
+            if chroma_health.get("status") != "healthy":
+                result["healthy"] = False
+
+            # Get V5 collection counts
+            try:
+                client = chroma_manager.get_client()
+                content_col = get_content_collection(client)
+                chunks_col = get_chunks_collection(client)
+                result["counts"]["content"] = content_col.count()
+                result["counts"]["chunks"] = chunks_col.count()
+            except Exception as e:
+                logger.warning(f"V5 status: Failed to get collection counts: {e}")
+                result["counts"]["content"] = 0
+                result["counts"]["chunks"] = 0
+
+        # Postgres health and counts
+        if pg_client:
+            try:
+                pg_health = await pg_client.health_check()
+                result["services"]["postgres"] = {
+                    "status": pg_health.get("status", "unknown"),
+                    "pool_size": pg_health.get("pool_size", 0)
+                }
+                if pg_health.get("status") != "healthy":
+                    result["healthy"] = False
+
+                # Get Postgres table counts
+                artifact_count = await pg_client.fetch_one("SELECT COUNT(*) as count FROM artifact_revision")
+                event_count = await pg_client.fetch_one("SELECT COUNT(*) as count FROM semantic_event")
+                entity_count = await pg_client.fetch_one("SELECT COUNT(*) as count FROM entity")
+                pending_count = await pg_client.fetch_one("SELECT COUNT(*) as count FROM event_jobs WHERE status = 'PENDING'")
+
+                result["counts"]["artifacts"] = artifact_count["count"] if artifact_count else 0
+                result["counts"]["events"] = event_count["count"] if event_count else 0
+                result["counts"]["entities"] = entity_count["count"] if entity_count else 0
+                result["pending_jobs"] = pending_count["count"] if pending_count else 0
+
+            except Exception as e:
+                logger.warning(f"V5 status: Postgres error: {e}")
+                result["services"]["postgres"] = {"status": "error", "error": str(e)}
+                result["healthy"] = False
+        else:
+            result["services"]["postgres"] = {"status": "unavailable"}
+
+        # OpenAI health
+        if embedding_service:
+            embed_health = embedding_service.health_check()
+            result["services"]["openai"] = {
+                "status": embed_health.get("status", "unknown"),
+                "model": config.openai_embed_model if config else "text-embedding-3-large"
+            }
+            if embed_health.get("status") != "healthy":
+                result["healthy"] = False
+
+        # Graph expansion status (V4/V5 uses Postgres joins, not AGE)
+        result["services"]["graph_expansion"] = {
+            "status": "available" if pg_client else "unavailable",
+            "backend": "postgres_joins"  # V5: no AGE dependency
+        }
+
+        # Job status for specific artifact if requested
+        if artifact_id and pg_client and job_queue_service:
+            try:
+                resolved_uid = await resolve_artifact_uid(artifact_id)
+                if resolved_uid:
+                    job_status_result = await job_queue_service.get_job_status(
+                        artifact_uid=resolved_uid
+                    )
+                    if job_status_result:
+                        result["job_status"] = job_status_result
+            except Exception as e:
+                logger.warning(f"V5 status: Failed to get job status: {e}")
+
+        return result
+
+    except Exception as e:
+        logger.error(f"V5 status error: {e}", exc_info=True)
+        return {
+            "version": __version__,
+            "environment": os.getenv("ENVIRONMENT", "development"),
+            "healthy": False,
+            "error": str(e)
+        }
+
+
+# ============================================================================
 # APPLICATION LIFECYCLE
 # ============================================================================
 
@@ -1628,14 +2509,10 @@ async def lifespan(app):
             job_queue_service = JobQueueService(pg_client, config.event_max_attempts)
             logger.info(f"  JobQueueService: OK (max attempts={config.event_max_attempts})")
 
-            # V4: Initialize graph service for AGE-based context expansion
-            graph_service = GraphService(pg_client, graph_name="nur")
-            graph_health = await graph_service.health_check()
-            if graph_health.age_enabled and graph_health.graph_exists:
-                logger.info(f"  GraphService: OK (graph=nur, entities={graph_health.entity_node_count}, events={graph_health.event_node_count})")
-            else:
-                logger.warning(f"  GraphService: AGE not available or graph not found - V4 graph expansion disabled")
-                graph_service = None
+            # V5: AGE GraphService disabled - graph expansion uses Postgres SQL joins
+            # See retrieval_service._expand_from_events_sql() for V5 implementation
+            graph_service = None
+            logger.info("  GraphService: Disabled (V5 uses Postgres SQL joins for graph expansion)")
 
         except Exception as e:
             logger.warning(f"  PostgreSQL: UNAVAILABLE ({e}) - V3/V4 features disabled")
