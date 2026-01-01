@@ -1,0 +1,255 @@
+# docker-compose.test.yml
+# =======================
+# MCP Memory Server V4 - Isolated Test Environment
+#
+# This is a standalone Docker Compose file for the test environment.
+# Port offset +200 from production to avoid conflicts.
+# Optimized for fast startup and teardown.
+#
+# Usage:
+#   docker compose -f docker-compose.test.yml --env-file .env.test up -d
+#   docker compose -f docker-compose.test.yml --env-file .env.test down -v
+#
+# Port Mapping:
+#   MCP Server:  3201 (prod: 3001, +200)
+#   ChromaDB:    8201 (prod: 8001, +200)
+#   PostgreSQL:  5632 (prod: 5432, +200)
+
+version: '3.8'
+
+services:
+  # ============================================================================
+  # ChromaDB - Vector database for embeddings (Test Instance)
+  # ============================================================================
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: mcp-chroma-v4-test
+    ports:
+      - "${CHROMA_PORT_EXTERNAL:-8201}:8000"
+    volumes:
+      - mcp_memory_v4_chroma_data_test:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+      - ALLOW_RESET=true  # Enable collection reset for tests
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/8000' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - mcp-network-test
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+  # ============================================================================
+  # PostgreSQL with AGE - Events database + Graph (Test Instance)
+  # ============================================================================
+  postgres:
+    image: apache/age:release_PG16_1.6.0
+    container_name: mcp-postgres-v4-test
+    ports:
+      - "${POSTGRES_PORT_EXTERNAL:-5632}:5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-events_test}
+      - POSTGRES_USER=${POSTGRES_USER:-events}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-test_secret_changeme}
+    volumes:
+      - mcp_memory_v4_postgres_data_test:/var/lib/postgresql/data
+      # Mount V3 init script (base tables)
+      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      # Mount V4 migrations
+      - ./v4/migrations/008_v4_entity_tables.sql:/docker-entrypoint-initdb.d/02-v4-entities.sql:ro
+      - ./v4/migrations/009_v4_age_setup.sql:/docker-entrypoint-initdb.d/03-v4-age.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-events} -d ${POSTGRES_DB:-events_test}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - mcp-network-test
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+
+  # ============================================================================
+  # MCP Memory Server V4 - HTTP Transport (Test Instance)
+  # ============================================================================
+  mcp-server:
+    build:
+      context: ../implementation/mcp-server
+      dockerfile: ../../deployment/Dockerfile
+      target: production
+    image: mcp-memory-server:v4
+    container_name: mcp-server-v4-test
+    ports:
+      - "${MCP_PORT:-3201}:3000"
+    environment:
+      # Environment identifier
+      - ENVIRONMENT=test
+
+      # OpenAI Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?OPENAI_API_KEY is required}
+      - OPENAI_EMBED_MODEL=${OPENAI_EMBED_MODEL:-text-embedding-3-large}
+      - OPENAI_EVENT_MODEL=${OPENAI_EVENT_MODEL:-gpt-4o-mini}
+      - OPENAI_EMBED_DIMS=${OPENAI_EMBED_DIMS:-3072}
+
+      # ChromaDB Configuration (internal)
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+
+      # PostgreSQL Configuration
+      - EVENTS_DB_DSN=postgresql://${POSTGRES_USER:-events}:${POSTGRES_PASSWORD:-test_secret_changeme}@postgres:5432/${POSTGRES_DB:-events_test}
+
+      # Server Configuration
+      - MCP_PORT=3000
+      - LOG_LEVEL=${LOG_LEVEL:-WARNING}  # Reduce log noise in tests
+
+      # V4 Graph Configuration
+      - V4_GRAPH_ENABLED=${V4_GRAPH_ENABLED:-true}
+      - V4_GRAPH_NAME=${V4_GRAPH_NAME:-nur_test}
+      - V4_GRAPH_QUERY_TIMEOUT_MS=${V4_GRAPH_QUERY_TIMEOUT_MS:-500}
+      - V4_GRAPH_BUDGET_DEFAULT=${V4_GRAPH_BUDGET_DEFAULT:-10}
+      - V4_GRAPH_BUDGET_MAX=${V4_GRAPH_BUDGET_MAX:-100}
+      - V4_GRAPH_SEED_LIMIT_DEFAULT=${V4_GRAPH_SEED_LIMIT_DEFAULT:-5}
+      - V4_GRAPH_SEED_LIMIT_MAX=${V4_GRAPH_SEED_LIMIT_MAX:-20}
+
+      # V4 Entity Resolution Configuration
+      - ENTITY_SIMILARITY_THRESHOLD=${ENTITY_SIMILARITY_THRESHOLD:-0.85}
+      - ENTITY_MAX_CANDIDATES=${ENTITY_MAX_CANDIDATES:-5}
+      - ENTITY_DEDUP_MODEL=${ENTITY_DEDUP_MODEL:-gpt-4o-mini}
+
+      # Connection Pool (reduced for testing)
+      - PG_POOL_SIZE=${PG_POOL_SIZE:-5}
+      - PG_POOL_MAX_OVERFLOW=${PG_POOL_MAX_OVERFLOW:-10}
+    volumes:
+      - ./healthcheck.py:/app/healthcheck.py:ro
+    healthcheck:
+      test: ["CMD", "python", "/app/healthcheck.py", "--service", "mcp-server"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      chroma:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - mcp-network-test
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+  # ============================================================================
+  # Event Worker V4 - Async extraction + entity resolution + graph upsert (Test)
+  # ============================================================================
+  event-worker:
+    build:
+      context: ../implementation/mcp-server
+      dockerfile: ../../deployment/Dockerfile
+      target: production
+    image: mcp-memory-server:v4
+    container_name: mcp-event-worker-v4-test
+    command: python -m src.worker
+    environment:
+      # Environment identifier
+      - ENVIRONMENT=test
+
+      # OpenAI Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?OPENAI_API_KEY is required}
+      - OPENAI_EVENT_MODEL=${OPENAI_EVENT_MODEL:-gpt-4o-mini}
+      - OPENAI_EMBED_MODEL=${OPENAI_EMBED_MODEL:-text-embedding-3-large}
+      - OPENAI_EMBED_DIMS=${OPENAI_EMBED_DIMS:-3072}
+
+      # ChromaDB Configuration (internal)
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+
+      # PostgreSQL Configuration
+      - EVENTS_DB_DSN=postgresql://${POSTGRES_USER:-events}:${POSTGRES_PASSWORD:-test_secret_changeme}@postgres:5432/${POSTGRES_DB:-events_test}
+
+      # Worker Configuration
+      - WORKER_ID=${WORKER_ID:-worker-test-1}
+      - POLL_INTERVAL_MS=${POLL_INTERVAL_MS:-1000}
+      - EVENT_MAX_ATTEMPTS=${EVENT_MAX_ATTEMPTS:-5}
+
+      # V4 Worker Configuration
+      - V4_WORKER_GRAPH_UPSERT=${V4_WORKER_GRAPH_UPSERT:-true}
+      - V4_GRAPH_UPSERT_BATCH_SIZE=${V4_GRAPH_UPSERT_BATCH_SIZE:-50}
+      - V4_GRAPH_ENABLED=${V4_GRAPH_ENABLED:-true}
+      - V4_GRAPH_NAME=${V4_GRAPH_NAME:-nur_test}
+
+      # V4 Entity Resolution
+      - ENTITY_SIMILARITY_THRESHOLD=${ENTITY_SIMILARITY_THRESHOLD:-0.85}
+      - ENTITY_MAX_CANDIDATES=${ENTITY_MAX_CANDIDATES:-5}
+      - ENTITY_DEDUP_MODEL=${ENTITY_DEDUP_MODEL:-gpt-4o-mini}
+
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-WARNING}  # Reduce log noise in tests
+    volumes:
+      - ./healthcheck.py:/app/healthcheck.py:ro
+    healthcheck:
+      test: ["CMD", "python", "/app/healthcheck.py", "--service", "worker"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      chroma:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mcp-server:
+        condition: service_healthy
+    networks:
+      - mcp-network-test
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  mcp-network-test:
+    driver: bridge
+    name: mcp-memory-v4-test-network
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  mcp_memory_v4_chroma_data_test:
+    driver: local
+    name: mcp_memory_v4_chroma_data_test
+  mcp_memory_v4_postgres_data_test:
+    driver: local
+    name: mcp_memory_v4_postgres_data_test

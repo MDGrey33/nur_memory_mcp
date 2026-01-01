@@ -1,0 +1,191 @@
+version: '3.8'
+
+# MCP Memory Server V3 - Production Docker Compose Configuration
+# This file defines the complete V3 stack with 4 services:
+# - chroma: Vector database for embeddings
+# - postgres: Events database and job queue
+# - mcp-server: FastMCP server with 17 tools
+# - event-worker: Async event extraction worker
+
+services:
+  # ChromaDB - Vector database for embeddings
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: mcp-chroma
+    ports:
+      - "8001:8000"  # External:Internal
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/api/v2/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  # PostgreSQL - Events database and job queue
+  postgres:
+    image: postgres:16-alpine
+    container_name: mcp-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-events}
+      - POSTGRES_USER=${POSTGRES_USER:-events}
+      # SECURITY: Password MUST be set in .env file - no weak default!
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - see .env.example}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-events} -d ${POSTGRES_DB:-events}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+  # MCP Memory Server - HTTP Transport
+  mcp-server:
+    build:
+      context: ../implementation/mcp-server
+      dockerfile: ../../deployment/Dockerfile
+      target: production
+    image: mcp-memory-server:v3
+    container_name: mcp-server
+    ports:
+      - "3000:3000"
+    environment:
+      # OpenAI Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?OPENAI_API_KEY is required}
+      - OPENAI_EMBED_MODEL=${OPENAI_EMBED_MODEL:-text-embedding-3-large}
+      - OPENAI_EVENT_MODEL=${OPENAI_EVENT_MODEL:-gpt-4o-mini}
+
+      # ChromaDB Configuration
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+
+      # PostgreSQL Configuration
+      # SECURITY: DSN MUST be set in .env file with your password - no weak default!
+      - EVENTS_DB_DSN=${EVENTS_DB_DSN:?EVENTS_DB_DSN is required - see .env.example}
+
+      # Server Configuration
+      - MCP_PORT=3000
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./healthcheck.py:/app/healthcheck.py:ro
+    healthcheck:
+      test: ["CMD", "python", "/app/healthcheck.py", "--service", "mcp-server"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      chroma:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  # Event Worker - Async event extraction
+  event-worker:
+    build:
+      context: ../implementation/mcp-server
+      dockerfile: ../../deployment/Dockerfile
+      target: production
+    image: mcp-memory-server:v3
+    container_name: mcp-event-worker
+    command: python -m src.worker
+    environment:
+      # OpenAI Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?OPENAI_API_KEY is required}
+      - OPENAI_EVENT_MODEL=${OPENAI_EVENT_MODEL:-gpt-4o-mini}
+
+      # ChromaDB Configuration
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+
+      # PostgreSQL Configuration
+      # SECURITY: DSN MUST be set in .env file with your password - no weak default!
+      - EVENTS_DB_DSN=${EVENTS_DB_DSN:?EVENTS_DB_DSN is required - see .env.example}
+
+      # Worker Configuration
+      - WORKER_ID=${WORKER_ID:-worker-1}
+      - POLL_INTERVAL_MS=${POLL_INTERVAL_MS:-1000}
+      - EVENT_MAX_ATTEMPTS=${EVENT_MAX_ATTEMPTS:-5}
+
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./healthcheck.py:/app/healthcheck.py:ro
+    healthcheck:
+      test: ["CMD", "python", "/app/healthcheck.py", "--service", "worker"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      chroma:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mcp-server:
+        condition: service_started
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+volumes:
+  chroma_data:
+    driver: local
+    name: mcp_memory_v3_chroma_data
+  postgres_data:
+    driver: local
+    name: mcp_memory_v3_postgres_data
+
+networks:
+  mcp-network:
+    driver: bridge
+    name: mcp-memory-v3-network
