@@ -1,0 +1,48 @@
+{
+  "doc_id": "emails/email_002.txt",
+  "events": [
+    {
+      "event_id": "evt_34d283df-5490-4315-881d-df9484b891cb",
+      "category": "Change",
+      "narrative": "Conference attendance has been paused until Q3.",
+      "confidence": 0.85,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_303d2b3a-f518-4f9a-9a07-cc6815e9d554",
+      "category": "Change",
+      "narrative": "Contractor budgets were reduced by 20%.",
+      "confidence": 0.85,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_aa4a8503-a4f6-4aa8-a739-b4d9241b445b",
+      "category": "Commitment",
+      "narrative": "Karen recommends revisiting hiring plans after the Q2 board meeting.",
+      "confidence": 0.9,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_867128ae-6c8b-4b4b-be69-2e6596acbe3f",
+      "category": "Commitment",
+      "narrative": "Karen needs James's approval before releasing $5,000 for influencer outreach.",
+      "confidence": 0.9,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_22d0e912-5d6e-4564-bd1d-4df056610f12",
+      "category": "Change",
+      "narrative": "The travel budget was reduced from $50K to $35K effective April 1st.",
+      "confidence": 0.9,
+      "event_time": "2024-04-01 00:00:00+00:00"
+    },
+    {
+      "event_id": "evt_4c9d3c00-d061-41f6-8026-f2435dbeed3e",
+      "category": "Decision",
+      "narrative": "James decided on a 15% reduction in non-essential spending during the executive review.",
+      "confidence": 0.95,
+      "event_time": "2024-03-23 00:00:00+00:00"
+    }
+  ],
+  "recorded_at": "2026-01-01T13:51:31.619685"
+}

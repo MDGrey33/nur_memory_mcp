@@ -1,0 +1,30 @@
+Subject: Engineering Sync - API Performance
+Date: 2024-03-18
+Attendees: Bob Smith (Eng Lead), David Park (Backend), Emma Wilson (DevOps)
+
+## Status Updates
+
+David reported the new caching layer is 80% complete. Performance tests show
+3x improvement in response times.
+
+Emma flagged a concern: our current infrastructure might not handle the expected
+load during launch week. She estimates we need to scale up to 5 nodes minimum.
+
+## Decisions
+
+Bob decided to prioritize the caching work over new features. David will focus
+exclusively on this until March 22nd.
+
+The team agreed to implement auto-scaling before launch. Emma will configure
+this by March 23rd.
+
+## Risks Identified
+
+- Database connection pooling may become a bottleneck
+- Third-party payment API has 99.5% SLA, which may not be sufficient
+
+## Action Items
+
+- David: Complete caching layer by March 22nd
+- Emma: Set up auto-scaling and load testing by March 23rd
+- Bob: Review database connection strategy by March 20th

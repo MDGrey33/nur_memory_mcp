@@ -1,0 +1,10 @@
+{
+  "doc_id": "conversations/conversation_002.txt",
+  "entities": [
+    {
+      "name": "Product Hunt",
+      "type": "PERSON"
+    }
+  ],
+  "recorded_at": "2026-01-01T13:55:56.980491"
+}

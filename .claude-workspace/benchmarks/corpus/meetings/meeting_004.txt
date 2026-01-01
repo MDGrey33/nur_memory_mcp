@@ -1,0 +1,34 @@
+Subject: Weekly Standup - Marketing Team
+Date: 2024-03-21
+Attendees: Grace Kim (Marketing Lead), Henry Adams (Content), Iris Zhang (Social)
+
+## Updates
+
+Grace: Launch campaign materials are 90% ready. Waiting on final product
+screenshots from the design team.
+
+Henry: Blog post draft is complete. Need Alice to review the technical
+sections for accuracy. Will send to her today.
+
+Iris: Social media calendar is locked in. We have 15 posts scheduled for
+launch week across all platforms.
+
+## Decisions
+
+The team agreed to delay the press release by 2 days to align with the
+product hunt launch. New date is April 3rd.
+
+Grace decided to allocate $5,000 additional budget for influencer outreach.
+She will coordinate with finance by March 25th.
+
+## Dependencies
+
+- Need product screenshots from Carol by March 23rd
+- Need technical review from Alice by March 24th
+- Need final pricing confirmation from Bob by March 22nd
+
+## Action Items
+
+- Henry: Send blog draft to Alice for review today
+- Iris: Prepare backup content in case of launch delays
+- Grace: Finalize influencer list and contracts by March 26th

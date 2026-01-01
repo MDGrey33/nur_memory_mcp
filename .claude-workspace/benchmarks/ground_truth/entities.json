@@ -1,0 +1,162 @@
+{
+  "version": "2.0",
+  "description": "Ground truth entities for V7 benchmark corpus - document-keyed for per-doc evaluation",
+  "global_entities": {
+    "people": [
+      {"id": "ent_alice", "name": "Alice Chen", "type": "PERSON", "role": "Product Manager"},
+      {"id": "ent_bob", "name": "Bob Smith", "type": "PERSON", "role": "Engineering Lead"},
+      {"id": "ent_carol", "name": "Carol Davis", "type": "PERSON", "role": "Design Lead"},
+      {"id": "ent_david", "name": "David Park", "type": "PERSON", "role": "Backend Engineer"},
+      {"id": "ent_emma", "name": "Emma Wilson", "type": "PERSON", "role": "DevOps Engineer"},
+      {"id": "ent_frank", "name": "Frank Lee", "type": "PERSON", "role": "Mobile Lead"},
+      {"id": "ent_grace", "name": "Grace Kim", "type": "PERSON", "role": "Marketing Lead"},
+      {"id": "ent_henry", "name": "Henry Adams", "type": "PERSON", "role": "Content Marketer"},
+      {"id": "ent_iris", "name": "Iris Zhang", "type": "PERSON", "role": "Social Media Manager"},
+      {"id": "ent_james", "name": "James Wong", "type": "PERSON", "role": "CEO"},
+      {"id": "ent_karen", "name": "Karen Liu", "type": "PERSON", "role": "CFO"}
+    ],
+    "organizations": [
+      {"id": "ent_techcorp", "name": "TechCorp", "type": "ORGANIZATION"},
+      {"id": "ent_acme", "name": "Acme Corp", "type": "ORGANIZATION"},
+      {"id": "ent_xyz", "name": "Competitor XYZ", "type": "ORGANIZATION"}
+    ],
+    "projects": [
+      {"id": "ent_api_refactor", "name": "API Refactor", "type": "PROJECT"},
+      {"id": "ent_caching_layer", "name": "Caching Layer", "type": "PROJECT"},
+      {"id": "ent_mobile_redesign", "name": "Mobile App Redesign", "type": "PROJECT"},
+      {"id": "ent_launch_campaign", "name": "Launch Campaign", "type": "PROJECT"},
+      {"id": "ent_auto_scaling", "name": "Auto-scaling Infrastructure", "type": "PROJECT"},
+      {"id": "ent_enterprise_tier", "name": "Enterprise Tier", "type": "PROJECT"}
+    ]
+  },
+  "documents": {
+    "meetings/meeting_001.txt": {
+      "entities": [
+        {"id": "ent_alice", "name": "Alice Chen", "type": "PERSON", "role": "PM"},
+        {"id": "ent_bob", "name": "Bob Smith", "type": "PERSON", "role": "Eng Lead"},
+        {"id": "ent_carol", "name": "Carol Davis", "type": "PERSON", "role": "Design"}
+      ]
+    },
+    "meetings/meeting_002.txt": {
+      "entities": [
+        {"id": "ent_bob", "name": "Bob Smith", "type": "PERSON", "role": "Eng Lead"},
+        {"id": "ent_david", "name": "David Park", "type": "PERSON", "role": "Backend"},
+        {"id": "ent_emma", "name": "Emma Wilson", "type": "PERSON", "role": "DevOps"},
+        {"id": "ent_caching_layer", "name": "Caching Layer", "type": "PROJECT"},
+        {"id": "ent_auto_scaling", "name": "Auto-scaling", "type": "PROJECT"}
+      ]
+    },
+    "meetings/meeting_003.txt": {
+      "entities": [
+        {"id": "ent_carol", "name": "Carol Davis", "type": "PERSON", "role": "Design"},
+        {"id": "ent_frank", "name": "Frank Lee", "type": "PERSON", "role": "Mobile Lead"},
+        {"id": "ent_alice", "name": "Alice Chen", "type": "PERSON", "role": "PM"},
+        {"id": "ent_mobile_redesign", "name": "Mobile App Redesign", "type": "PROJECT"}
+      ]
+    },
+    "meetings/meeting_004.txt": {
+      "entities": [
+        {"id": "ent_grace", "name": "Grace Kim", "type": "PERSON", "role": "Marketing Lead"},
+        {"id": "ent_henry", "name": "Henry Adams", "type": "PERSON", "role": "Content"},
+        {"id": "ent_iris", "name": "Iris Zhang", "type": "PERSON", "role": "Social"},
+        {"id": "ent_alice", "name": "Alice Chen", "type": "PERSON"},
+        {"id": "ent_carol", "name": "Carol Davis", "type": "PERSON"},
+        {"id": "ent_bob", "name": "Bob Smith", "type": "PERSON"},
+        {"id": "ent_launch_campaign", "name": "Launch Campaign", "type": "PROJECT"}
+      ]
+    },
+    "meetings/meeting_005.txt": {
+      "entities": [
+        {"id": "ent_alice", "name": "Alice Chen", "type": "PERSON", "role": "PM"},
+        {"id": "ent_bob", "name": "Bob Smith", "type": "PERSON", "role": "Eng Lead"},
+        {"id": "ent_james", "name": "James Wong", "type": "PERSON", "role": "CEO"},
+        {"id": "ent_karen", "name": "Karen Liu", "type": "PERSON", "role": "CFO"},
+        {"id": "ent_techcorp", "name": "TechCorp", "type": "ORGANIZATION"},
+        {"id": "ent_acme", "name": "Acme Corp", "type": "ORGANIZATION"},
+        {"id": "ent_xyz", "name": "Competitor XYZ", "type": "ORGANIZATION"},
+        {"id": "ent_enterprise_tier", "name": "Enterprise Tier", "type": "PROJECT"}
+      ]
+    },
+    "emails/email_001.txt": {
+      "entities": [
+        {"id": "ent_alice", "name": "Alice Chen", "type": "PERSON"},
+        {"id": "ent_bob", "name": "Bob Smith", "type": "PERSON"},
+        {"id": "ent_carol", "name": "Carol Davis", "type": "PERSON"},
+        {"id": "ent_david", "name": "David Park", "type": "PERSON"},
+        {"id": "ent_api_refactor", "name": "API Refactor", "type": "PROJECT"},
+        {"id": "ent_caching_layer", "name": "Caching Layer", "type": "PROJECT"}
+      ]
+    },
+    "emails/email_002.txt": {
+      "entities": [
+        {"id": "ent_karen", "name": "Karen Liu", "type": "PERSON", "role": "CFO"},
+        {"id": "ent_james", "name": "James Wong", "type": "PERSON", "role": "CEO"},
+        {"id": "ent_alice", "name": "Alice Chen", "type": "PERSON"},
+        {"id": "ent_grace", "name": "Grace Kim", "type": "PERSON"}
+      ]
+    },
+    "emails/email_003.txt": {
+      "entities": [
+        {"id": "ent_bob", "name": "Bob Smith", "type": "PERSON"},
+        {"id": "ent_david", "name": "David Park", "type": "PERSON"},
+        {"id": "ent_emma", "name": "Emma Wilson", "type": "PERSON"},
+        {"id": "ent_alice", "name": "Alice Chen", "type": "PERSON"},
+        {"id": "ent_caching_layer", "name": "Caching Layer", "type": "PROJECT"}
+      ]
+    },
+    "decisions/decision_001.txt": {
+      "entities": [
+        {"id": "ent_alice", "name": "Alice Chen", "type": "PERSON", "role": "PM"},
+        {"id": "ent_carol", "name": "Carol Davis", "type": "PERSON"},
+        {"id": "ent_frank", "name": "Frank Lee", "type": "PERSON"},
+        {"id": "ent_mobile_redesign", "name": "Mobile App Redesign", "type": "PROJECT"}
+      ]
+    },
+    "decisions/decision_002.txt": {
+      "entities": [
+        {"id": "ent_alice", "name": "Alice Chen", "type": "PERSON", "role": "PM"},
+        {"id": "ent_bob", "name": "Bob Smith", "type": "PERSON", "role": "Eng Lead"},
+        {"id": "ent_carol", "name": "Carol Davis", "type": "PERSON", "role": "Design"}
+      ]
+    },
+    "conversations/conversation_001.txt": {
+      "entities": [
+        {"id": "ent_david", "name": "David Park", "type": "PERSON"},
+        {"id": "ent_bob", "name": "Bob Smith", "type": "PERSON"},
+        {"id": "ent_emma", "name": "Emma Wilson", "type": "PERSON"},
+        {"id": "ent_alice", "name": "Alice Chen", "type": "PERSON"},
+        {"id": "ent_caching_layer", "name": "Caching Layer", "type": "PROJECT"},
+        {"id": "ent_auto_scaling", "name": "Auto-scaling", "type": "PROJECT"}
+      ]
+    },
+    "conversations/conversation_002.txt": {
+      "entities": [
+        {"id": "ent_grace", "name": "Grace Kim", "type": "PERSON"},
+        {"id": "ent_henry", "name": "Henry Adams", "type": "PERSON"},
+        {"id": "ent_iris", "name": "Iris Zhang", "type": "PERSON"},
+        {"id": "ent_carol", "name": "Carol Davis", "type": "PERSON"},
+        {"id": "ent_karen", "name": "Karen Liu", "type": "PERSON"},
+        {"id": "ent_launch_campaign", "name": "Launch Campaign", "type": "PROJECT"}
+      ]
+    }
+  },
+  "relationships": [
+    {"from": "ent_bob", "to": "ent_david", "type": "manages", "evidence": "Bob assigned caching priority to David"},
+    {"from": "ent_bob", "to": "ent_emma", "type": "manages", "evidence": "Bob assigned PgBouncer work to Emma"},
+    {"from": "ent_alice", "to": "ent_bob", "type": "collaborates", "evidence": "Alice and Bob coordinate on launch timeline"},
+    {"from": "ent_grace", "to": "ent_henry", "type": "manages", "evidence": "Grace leads marketing team including Henry"},
+    {"from": "ent_grace", "to": "ent_iris", "type": "manages", "evidence": "Grace leads marketing team including Iris"},
+    {"from": "ent_james", "to": "ent_techcorp", "type": "negotiating", "evidence": "James in partnership discussions with TechCorp"}
+  ],
+  "statistics": {
+    "total_documents": 12,
+    "total_unique_entities": 20,
+    "total_entity_mentions": 61,
+    "entities_by_type": {
+      "PERSON": 11,
+      "ORGANIZATION": 3,
+      "PROJECT": 6
+    },
+    "note": "20 unique entities appear 61 times across 12 documents"
+  }
+}

@@ -1,0 +1,34 @@
+Subject: Design Review - Mobile App Redesign
+Date: 2024-03-20
+Attendees: Carol Davis (Design), Frank Lee (Mobile Lead), Alice Chen (PM)
+
+## Review Summary
+
+Carol presented three design options for the mobile app home screen:
+- Option A: Card-based layout with quick actions
+- Option B: List view with expandable sections
+- Option C: Tab-based navigation with dashboard
+
+After user research feedback, the team decided to go with Option A. Users
+preferred the visual clarity and one-tap access to common tasks.
+
+## Feedback
+
+Alice requested adding a notification badge to the main action button.
+Frank noted this would require backend changes to track unread counts.
+
+Carol agreed to update the designs by March 22nd to include the badge.
+
+## Concerns Raised
+
+Frank is worried about the timeline. The new design requires significant
+refactoring of the navigation stack. He estimates 2 extra weeks needed.
+
+Alice asked Frank to provide a detailed breakdown by EOD tomorrow so she
+can discuss timeline adjustments with stakeholders.
+
+## Next Steps
+
+- Carol: Deliver updated mockups with notification badge by March 22nd
+- Frank: Send timeline breakdown by March 21st EOD
+- Alice: Schedule stakeholder call for March 22nd afternoon

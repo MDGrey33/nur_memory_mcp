@@ -1,0 +1,41 @@
+{
+  "doc_id": "decisions/decision_002.txt",
+  "events": [
+    {
+      "event_id": "evt_ddc2f91d-03c7-45de-bcd0-9122348b945a",
+      "category": "Commitment",
+      "narrative": "Alice confirmed budget approval for additional infrastructure.",
+      "confidence": 0.9,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_b944c3a1-61ba-41f7-9a85-e39e27d64da3",
+      "category": "Execution",
+      "narrative": "Rate limiting was implemented for the free tier.",
+      "confidence": 0.85,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_b3a4382e-88c8-4559-8110-0543e237c091",
+      "category": "Commitment",
+      "narrative": "Bob's team is due to complete billing integration by March 25th.",
+      "confidence": 0.9,
+      "event_time": "2024-03-25 00:00:00+00:00"
+    },
+    {
+      "event_id": "evt_54bde0be-604d-456e-be5b-560708714ae5",
+      "category": "Commitment",
+      "narrative": "Carol is responsible for delivering the pricing page design by March 18th.",
+      "confidence": 0.9,
+      "event_time": "2024-03-18 00:00:00+00:00"
+    },
+    {
+      "event_id": "evt_2125195f-bec2-4dad-b29b-8aaf65cc9a78",
+      "category": "Decision",
+      "narrative": "Team decided to select the Freemium Model for the pricing strategy.",
+      "confidence": 0.95,
+      "event_time": "2024-03-15 00:00:00+00:00"
+    }
+  ],
+  "recorded_at": "2026-01-01T13:53:35.380427"
+}

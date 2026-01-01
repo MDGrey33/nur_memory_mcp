@@ -1,0 +1,48 @@
+{
+  "doc_id": "meetings/meeting_003.txt",
+  "events": [
+    {
+      "event_id": "evt_3eba9111-3401-4920-b062-d32dabf0eeaf",
+      "category": "QualityRisk",
+      "narrative": "Frank raised concerns about the timeline due to significant refactoring of the navigation stack.",
+      "confidence": 0.85,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_ef0b4b1d-385c-4591-bfb8-db6b186163bf",
+      "category": "Feedback",
+      "narrative": "Alice requested adding a notification badge to the main action button.",
+      "confidence": 0.9,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_101c7655-69b8-4f00-a654-2ef55e683cbb",
+      "category": "Commitment",
+      "narrative": "Alice committed to schedule a stakeholder call for March 22nd afternoon.",
+      "confidence": 0.95,
+      "event_time": "2024-03-22 15:00:00+00:00"
+    },
+    {
+      "event_id": "evt_d56ad62d-0f37-401c-9fa6-d090f9e26334",
+      "category": "Commitment",
+      "narrative": "Carol agreed to update the designs by March 22nd to include the notification badge.",
+      "confidence": 0.95,
+      "event_time": "2024-03-22 00:00:00+00:00"
+    },
+    {
+      "event_id": "evt_6db34ae6-78e7-4f55-9435-548b9e793caf",
+      "category": "Commitment",
+      "narrative": "Frank committed to send a detailed timeline breakdown by March 21st EOD.",
+      "confidence": 0.95,
+      "event_time": "2024-03-21 23:59:59+00:00"
+    },
+    {
+      "event_id": "evt_8bba3c07-585f-4f6f-910c-5a384622c9d6",
+      "category": "Decision",
+      "narrative": "The team decided to go with Option A for the mobile app redesign after user research feedback.",
+      "confidence": 0.9,
+      "event_time": "2024-03-20 00:00:00+00:00"
+    }
+  ],
+  "recorded_at": "2026-01-01T13:48:10.643175"
+}

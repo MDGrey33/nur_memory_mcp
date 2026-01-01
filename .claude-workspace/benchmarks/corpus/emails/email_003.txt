@@ -1,0 +1,30 @@
+From: bob.smith@company.com
+To: david.park@company.com, emma.wilson@company.com
+Subject: Urgent: Database Connection Pooling
+Date: 2024-03-20
+
+David, Emma,
+
+I've completed my review of the database connection strategy. Here are my findings:
+
+Current State:
+- Max connections: 20 (will bottleneck at 500+ concurrent users)
+- No connection pooling configured
+- Third-party payment API SLA concern remains (99.5% may not suffice)
+
+My Decision:
+We need to implement PgBouncer before launch. Emma, please add this to
+the infrastructure work alongside auto-scaling.
+
+Timeline:
+- David: Continue caching layer (due March 22nd) - on track
+- Emma: Add PgBouncer to auto-scaling work (due March 23rd)
+
+Risk Mitigation:
+I'm escalating the payment API SLA concern to Alice. We may need a fallback
+payment processor for launch week.
+
+Let's discuss implementation details in tomorrow's standup.
+
+Bob Smith
+Engineering Lead

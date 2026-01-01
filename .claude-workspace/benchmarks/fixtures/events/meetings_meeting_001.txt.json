@@ -1,0 +1,41 @@
+{
+  "doc_id": "meetings/meeting_001.txt",
+  "events": [
+    {
+      "event_id": "evt_4c2675e7-6de9-48bd-91ef-08febbbf818f",
+      "category": "Decision",
+      "narrative": "Alice decided to launch the product on April 1st after discussion.",
+      "confidence": 0.95,
+      "event_time": "2024-04-01 00:00:00+00:00"
+    },
+    {
+      "event_id": "evt_d5e7102d-90cd-4d98-8bc4-d91e2a65ed11",
+      "category": "Commitment",
+      "narrative": "Bob committed to complete the API refactor by March 25th.",
+      "confidence": 0.9,
+      "event_time": "2024-03-25 00:00:00+00:00"
+    },
+    {
+      "event_id": "evt_d1fc9790-fca5-4e1f-ac86-9a9178b1f508",
+      "category": "Collaboration",
+      "narrative": "A follow-up meeting is scheduled for March 22nd to review progress.",
+      "confidence": 0.85,
+      "event_time": "2024-03-22 00:00:00+00:00"
+    },
+    {
+      "event_id": "evt_24fef58b-cfd1-4c79-af38-cbb70c1f2baf",
+      "category": "Commitment",
+      "narrative": "Carol committed to finalize the UI mockups by March 20th.",
+      "confidence": 0.9,
+      "event_time": "2024-03-20 00:00:00+00:00"
+    },
+    {
+      "event_id": "evt_32eb9d87-114f-463c-948d-0b9e75e0cf7c",
+      "category": "Commitment",
+      "narrative": "Alice committed to send the launch announcement draft by March 18th.",
+      "confidence": 0.9,
+      "event_time": "2024-03-18 00:00:00+00:00"
+    }
+  ],
+  "recorded_at": "2026-01-01T13:46:31.973928"
+}

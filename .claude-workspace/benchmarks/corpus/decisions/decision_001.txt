@@ -1,0 +1,40 @@
+Decision Record: Mobile App Home Screen Design
+Date: 2024-03-20
+Decision Maker: Alice Chen (PM), with input from Carol Davis, Frank Lee
+Status: Approved
+
+## Context
+
+The mobile app requires a home screen redesign to improve user engagement.
+Carol presented three design options based on user research.
+
+## Options Considered
+
+1. **Option A: Card-based layout** - Quick actions, visual clarity
+2. **Option B: List view** - Expandable sections, compact
+3. **Option C: Tab-based navigation** - Dashboard-centric
+
+## Decision
+
+**Selected: Option A (Card-based layout)**
+
+Rationale:
+- User research showed 73% preference for card layout
+- One-tap access to common tasks scored highest in usability testing
+- Visual clarity aligns with brand guidelines
+
+## Modifications
+
+- Added notification badge to main action button (Alice's request)
+- Badge requires backend changes for unread count tracking (Frank noted)
+
+## Timeline Impact
+
+Frank estimates 2 extra weeks needed for navigation stack refactoring.
+Alice to discuss timeline adjustment with stakeholders on March 22nd.
+
+## Action Items
+
+- Carol: Updated mockups with badge by March 22nd
+- Frank: Detailed timeline breakdown by March 21st EOD
+- Alice: Stakeholder alignment call March 22nd PM

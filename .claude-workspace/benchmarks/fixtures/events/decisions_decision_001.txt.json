@@ -1,0 +1,34 @@
+{
+  "doc_id": "decisions/decision_001.txt",
+  "events": [
+    {
+      "event_id": "evt_8cb02aba-dfc1-4d3b-9f5a-f75ae6473ff8",
+      "category": "Commitment",
+      "narrative": "Alice will discuss timeline adjustment with stakeholders on March 22nd.",
+      "confidence": 0.9,
+      "event_time": "2024-03-22 00:00:00+00:00"
+    },
+    {
+      "event_id": "evt_09255ac1-e586-4d22-9e4e-ca5afe4eee3b",
+      "category": "Execution",
+      "narrative": "Carol will provide updated mockups with the notification badge by March 22nd.",
+      "confidence": 0.85,
+      "event_time": "2024-03-22 00:00:00+00:00"
+    },
+    {
+      "event_id": "evt_7a243c43-83ee-414b-a76b-eb0f5ce5e5a8",
+      "category": "Execution",
+      "narrative": "Frank will provide a detailed timeline breakdown by March 21st EOD.",
+      "confidence": 0.85,
+      "event_time": "2024-03-21 00:00:00+00:00"
+    },
+    {
+      "event_id": "evt_96006fac-9686-4094-9850-799503c05794",
+      "category": "Decision",
+      "narrative": "Team decided to select Option A (Card-based layout) for the mobile app home screen redesign.",
+      "confidence": 0.95,
+      "event_time": "2024-03-20 00:00:00+00:00"
+    }
+  ],
+  "recorded_at": "2026-01-01T13:52:58.325056"
+}

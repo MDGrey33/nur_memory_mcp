@@ -1,0 +1,41 @@
+{
+  "doc_id": "meetings/meeting_004.txt",
+  "events": [
+    {
+      "event_id": "evt_ff5bb567-4929-439e-92ca-0c8eeaa73850",
+      "category": "Commitment",
+      "narrative": "Henry will send the blog draft to Alice for review today.",
+      "confidence": 0.95,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_d0af22e3-5917-4daa-8264-05ea66578527",
+      "category": "Execution",
+      "narrative": "Iris locked in the social media calendar with 15 posts scheduled for launch week.",
+      "confidence": 0.95,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_8d62d3da-6ef2-4b01-90a1-2a9bf8398364",
+      "category": "QualityRisk",
+      "narrative": "The team is waiting on final product screenshots from the design team.",
+      "confidence": 0.85,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_57f2b411-2d78-4666-a014-2aaba2928332",
+      "category": "Decision",
+      "narrative": "The team agreed to delay the press release by 2 days to align with the product hunt launch.",
+      "confidence": 0.95,
+      "event_time": "2024-04-03 00:00:00+00:00"
+    },
+    {
+      "event_id": "evt_2fe74ead-8436-475a-8ede-934ec61e1308",
+      "category": "Commitment",
+      "narrative": "Grace will coordinate with finance regarding the additional budget for influencer outreach by March 25th.",
+      "confidence": 0.95,
+      "event_time": "2024-03-25 00:00:00+00:00"
+    }
+  ],
+  "recorded_at": "2026-01-01T13:49:01.942065"
+}

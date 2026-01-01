@@ -1,0 +1,220 @@
+{
+  "version": "1.0",
+  "description": "Ground truth for graph expansion - expected connections between entities across documents",
+  "entity_connections": {
+    "ent_alice": {
+      "name": "Alice Chen",
+      "connected_entities": [
+        {"id": "ent_bob", "reason": "Collaborates on launch timeline", "docs": ["meetings/meeting_001.txt", "meetings/meeting_005.txt", "emails/email_001.txt"]},
+        {"id": "ent_carol", "reason": "Works together on design/UI", "docs": ["meetings/meeting_001.txt", "meetings/meeting_003.txt", "decisions/decision_002.txt"]},
+        {"id": "ent_david", "reason": "Coordinates on caching/API work", "docs": ["emails/email_001.txt", "conversations/conversation_001.txt"]},
+        {"id": "ent_grace", "reason": "Coordinates on marketing/launch", "docs": ["meetings/meeting_004.txt", "emails/email_002.txt"]},
+        {"id": "ent_james", "reason": "Reports to CEO", "docs": ["meetings/meeting_005.txt"]},
+        {"id": "ent_karen", "reason": "Works with CFO on budget", "docs": ["meetings/meeting_005.txt", "emails/email_002.txt"]}
+      ],
+      "connected_projects": [
+        {"id": "ent_api_refactor", "role": "oversight", "docs": ["emails/email_001.txt"]},
+        {"id": "ent_mobile_redesign", "role": "oversight", "docs": ["meetings/meeting_003.txt", "decisions/decision_001.txt"]},
+        {"id": "ent_launch_campaign", "role": "coordinator", "docs": ["meetings/meeting_004.txt"]}
+      ]
+    },
+    "ent_bob": {
+      "name": "Bob Smith",
+      "connected_entities": [
+        {"id": "ent_alice", "reason": "Coordinates on launch timeline", "docs": ["meetings/meeting_001.txt", "meetings/meeting_005.txt"]},
+        {"id": "ent_david", "reason": "Manages backend work", "docs": ["meetings/meeting_002.txt", "emails/email_003.txt", "conversations/conversation_001.txt"]},
+        {"id": "ent_emma", "reason": "Manages infrastructure work", "docs": ["meetings/meeting_002.txt", "emails/email_003.txt"]},
+        {"id": "ent_carol", "reason": "Coordinates on decisions", "docs": ["meetings/meeting_001.txt", "decisions/decision_002.txt"]}
+      ],
+      "connected_projects": [
+        {"id": "ent_api_refactor", "role": "lead", "docs": ["meetings/meeting_001.txt", "emails/email_001.txt"]},
+        {"id": "ent_caching_layer", "role": "oversight", "docs": ["meetings/meeting_002.txt", "emails/email_001.txt"]},
+        {"id": "ent_enterprise_tier", "role": "engineering lead", "docs": ["meetings/meeting_005.txt"]}
+      ]
+    },
+    "ent_carol": {
+      "name": "Carol Davis",
+      "connected_entities": [
+        {"id": "ent_alice", "reason": "Reports to PM on design", "docs": ["meetings/meeting_001.txt", "meetings/meeting_003.txt"]},
+        {"id": "ent_frank", "reason": "Coordinates on mobile design", "docs": ["meetings/meeting_003.txt", "decisions/decision_001.txt"]},
+        {"id": "ent_grace", "reason": "Provides assets for marketing", "docs": ["meetings/meeting_004.txt", "conversations/conversation_002.txt"]}
+      ],
+      "connected_projects": [
+        {"id": "ent_mobile_redesign", "role": "design lead", "docs": ["meetings/meeting_003.txt", "decisions/decision_001.txt"]}
+      ]
+    },
+    "ent_david": {
+      "name": "David Park",
+      "connected_entities": [
+        {"id": "ent_bob", "reason": "Reports to eng lead", "docs": ["meetings/meeting_002.txt", "emails/email_003.txt", "conversations/conversation_001.txt"]},
+        {"id": "ent_emma", "reason": "Coordinates on infrastructure", "docs": ["meetings/meeting_002.txt", "conversations/conversation_001.txt"]},
+        {"id": "ent_alice", "reason": "Reports progress to PM", "docs": ["emails/email_001.txt"]}
+      ],
+      "connected_projects": [
+        {"id": "ent_caching_layer", "role": "implementer", "docs": ["meetings/meeting_002.txt", "emails/email_001.txt", "conversations/conversation_001.txt"]},
+        {"id": "ent_api_refactor", "role": "contributor", "docs": ["emails/email_001.txt"]}
+      ]
+    },
+    "ent_emma": {
+      "name": "Emma Wilson",
+      "connected_entities": [
+        {"id": "ent_bob", "reason": "Reports to eng lead", "docs": ["meetings/meeting_002.txt", "emails/email_003.txt"]},
+        {"id": "ent_david", "reason": "Coordinates on infrastructure", "docs": ["meetings/meeting_002.txt", "conversations/conversation_001.txt"]}
+      ],
+      "connected_projects": [
+        {"id": "ent_auto_scaling", "role": "implementer", "docs": ["meetings/meeting_002.txt", "conversations/conversation_001.txt"]},
+        {"id": "ent_caching_layer", "role": "contributor", "docs": ["emails/email_003.txt"]}
+      ]
+    },
+    "ent_frank": {
+      "name": "Frank Lee",
+      "connected_entities": [
+        {"id": "ent_carol", "reason": "Works with design lead", "docs": ["meetings/meeting_003.txt", "decisions/decision_001.txt"]},
+        {"id": "ent_alice", "reason": "Reports timeline to PM", "docs": ["meetings/meeting_003.txt"]}
+      ],
+      "connected_projects": [
+        {"id": "ent_mobile_redesign", "role": "mobile lead", "docs": ["meetings/meeting_003.txt", "decisions/decision_001.txt"]}
+      ]
+    },
+    "ent_grace": {
+      "name": "Grace Kim",
+      "connected_entities": [
+        {"id": "ent_henry", "reason": "Manages content marketer", "docs": ["meetings/meeting_004.txt", "conversations/conversation_002.txt"]},
+        {"id": "ent_iris", "reason": "Manages social media", "docs": ["meetings/meeting_004.txt", "conversations/conversation_002.txt"]},
+        {"id": "ent_alice", "reason": "Coordinates with PM", "docs": ["meetings/meeting_004.txt"]},
+        {"id": "ent_karen", "reason": "Gets budget approval", "docs": ["conversations/conversation_002.txt"]}
+      ],
+      "connected_projects": [
+        {"id": "ent_launch_campaign", "role": "lead", "docs": ["meetings/meeting_004.txt", "conversations/conversation_002.txt"]}
+      ]
+    },
+    "ent_henry": {
+      "name": "Henry Adams",
+      "connected_entities": [
+        {"id": "ent_grace", "reason": "Reports to marketing lead", "docs": ["meetings/meeting_004.txt", "conversations/conversation_002.txt"]},
+        {"id": "ent_alice", "reason": "Gets content approval", "docs": ["meetings/meeting_004.txt", "conversations/conversation_002.txt"]}
+      ],
+      "connected_projects": [
+        {"id": "ent_launch_campaign", "role": "content", "docs": ["meetings/meeting_004.txt", "conversations/conversation_002.txt"]}
+      ]
+    },
+    "ent_iris": {
+      "name": "Iris Zhang",
+      "connected_entities": [
+        {"id": "ent_grace", "reason": "Reports to marketing lead", "docs": ["meetings/meeting_004.txt", "conversations/conversation_002.txt"]},
+        {"id": "ent_henry", "reason": "Coordinates on content", "docs": ["conversations/conversation_002.txt"]}
+      ],
+      "connected_projects": [
+        {"id": "ent_launch_campaign", "role": "social media", "docs": ["meetings/meeting_004.txt", "conversations/conversation_002.txt"]}
+      ]
+    },
+    "ent_james": {
+      "name": "James Wong",
+      "connected_entities": [
+        {"id": "ent_karen", "reason": "Works with CFO", "docs": ["meetings/meeting_005.txt", "emails/email_002.txt"]},
+        {"id": "ent_alice", "reason": "PM reports to CEO", "docs": ["meetings/meeting_005.txt"]},
+        {"id": "ent_bob", "reason": "Eng lead reports to CEO", "docs": ["meetings/meeting_005.txt"]}
+      ],
+      "connected_projects": [
+        {"id": "ent_enterprise_tier", "role": "sponsor", "docs": ["meetings/meeting_005.txt"]}
+      ],
+      "connected_orgs": [
+        {"id": "ent_techcorp", "reason": "Partnership discussions", "docs": ["meetings/meeting_005.txt"]}
+      ]
+    },
+    "ent_karen": {
+      "name": "Karen Liu",
+      "connected_entities": [
+        {"id": "ent_james", "reason": "Reports to CEO", "docs": ["meetings/meeting_005.txt", "emails/email_002.txt"]},
+        {"id": "ent_alice", "reason": "Budget coordination", "docs": ["emails/email_002.txt"]},
+        {"id": "ent_grace", "reason": "Approves marketing budget", "docs": ["conversations/conversation_002.txt"]}
+      ],
+      "connected_projects": []
+    }
+  },
+  "project_connections": {
+    "ent_api_refactor": {
+      "name": "API Refactor",
+      "actors": ["ent_bob", "ent_david"],
+      "documents": ["meetings/meeting_001.txt", "emails/email_001.txt"]
+    },
+    "ent_caching_layer": {
+      "name": "Caching Layer",
+      "actors": ["ent_david", "ent_bob", "ent_emma"],
+      "documents": ["meetings/meeting_002.txt", "emails/email_001.txt", "emails/email_003.txt", "conversations/conversation_001.txt"]
+    },
+    "ent_mobile_redesign": {
+      "name": "Mobile App Redesign",
+      "actors": ["ent_carol", "ent_frank", "ent_alice"],
+      "documents": ["meetings/meeting_003.txt", "decisions/decision_001.txt"]
+    },
+    "ent_launch_campaign": {
+      "name": "Launch Campaign",
+      "actors": ["ent_grace", "ent_henry", "ent_iris", "ent_carol"],
+      "documents": ["meetings/meeting_004.txt", "conversations/conversation_002.txt"]
+    },
+    "ent_auto_scaling": {
+      "name": "Auto-scaling Infrastructure",
+      "actors": ["ent_emma", "ent_david"],
+      "documents": ["meetings/meeting_002.txt", "conversations/conversation_001.txt"]
+    },
+    "ent_enterprise_tier": {
+      "name": "Enterprise Tier",
+      "actors": ["ent_bob", "ent_james"],
+      "documents": ["meetings/meeting_005.txt"]
+    }
+  },
+  "benchmark_queries": [
+    {
+      "id": "gq_001",
+      "type": "entity_expansion",
+      "seed": "ent_alice",
+      "query": "Events connected to Alice",
+      "expected_connections": ["ent_bob", "ent_carol", "ent_david", "ent_grace", "ent_james", "ent_karen"],
+      "expected_docs": ["meetings/meeting_001.txt", "meetings/meeting_003.txt", "meetings/meeting_004.txt", "meetings/meeting_005.txt", "emails/email_001.txt", "emails/email_002.txt", "decisions/decision_001.txt", "decisions/decision_002.txt", "conversations/conversation_001.txt"]
+    },
+    {
+      "id": "gq_002",
+      "type": "entity_expansion",
+      "seed": "ent_bob",
+      "query": "Events connected to Bob",
+      "expected_connections": ["ent_alice", "ent_david", "ent_emma", "ent_carol"],
+      "expected_docs": ["meetings/meeting_001.txt", "meetings/meeting_002.txt", "meetings/meeting_005.txt", "emails/email_001.txt", "emails/email_003.txt", "decisions/decision_002.txt", "conversations/conversation_001.txt"]
+    },
+    {
+      "id": "gq_003",
+      "type": "project_expansion",
+      "seed": "ent_caching_layer",
+      "query": "Who worked on the caching layer?",
+      "expected_connections": ["ent_david", "ent_bob", "ent_emma"],
+      "expected_docs": ["meetings/meeting_002.txt", "emails/email_001.txt", "emails/email_003.txt", "conversations/conversation_001.txt"]
+    },
+    {
+      "id": "gq_004",
+      "type": "relationship_expansion",
+      "seed_from": "ent_david",
+      "seed_to": "ent_bob",
+      "query": "David and Bob's work relationship",
+      "expected_docs": ["meetings/meeting_002.txt", "emails/email_003.txt", "conversations/conversation_001.txt"],
+      "expected_projects": ["ent_caching_layer", "ent_api_refactor"]
+    },
+    {
+      "id": "gq_005",
+      "type": "entity_expansion",
+      "seed": "ent_grace",
+      "query": "Grace's team and work",
+      "expected_connections": ["ent_henry", "ent_iris", "ent_alice", "ent_karen", "ent_carol"],
+      "expected_docs": ["meetings/meeting_004.txt", "conversations/conversation_002.txt"]
+    }
+  ],
+  "statistics": {
+    "total_entities": 17,
+    "entities_by_type": {
+      "PERSON": 11,
+      "ORGANIZATION": 3,
+      "PROJECT": 6
+    },
+    "total_connections": 45,
+    "graph_queries": 5
+  }
+}

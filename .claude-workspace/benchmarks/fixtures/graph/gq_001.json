@@ -1,0 +1,38 @@
+{
+  "query_id": "gq_001",
+  "connections": [
+    "Alice Chen",
+    "Carol Davis",
+    "Bob",
+    "Bob Smith",
+    "Carol",
+    "David",
+    "Frank Lee",
+    "Infrastructure Team"
+  ],
+  "docs": [
+    "101c7655-69b8-4f00-a654-2ef55e683cbb",
+    "2125195f-bec2-4dad-b29b-8aaf65cc9a78",
+    "32eb9d87-114f-463c-948d-0b9e75e0cf7c",
+    "4671f30b-0fdd-428d-a0a7-8bde6966490d",
+    "4c2675e7-6de9-48bd-91ef-08febbbf818f",
+    "8cb02aba-dfc1-4d3b-9f5a-f75ae6473ff8",
+    "96006fac-9686-4094-9850-799503c05794",
+    "ddc2f91d-03c7-45de-bcd0-9122348b945a",
+    "art_e1a8ff83d844",
+    "art_2012fd729737",
+    "art_93bf879580a6",
+    "art_7beae3dcd2ee",
+    "art_a4730edf5bd6",
+    "art_dee119ff3325",
+    "art_016ef8d63534",
+    "art_84a31eaf7c62",
+    "art_5f3a219381fb",
+    "art_c1e23487fca7",
+    "7582b099-fa4c-4c4c-8e27-ba121628e9d1",
+    "17e64ff5-392b-4f2f-872f-0d02241072ff",
+    "ef23000d-577e-4e94-a1fd-549424ace2bb",
+    "1831dfb4-80bd-4f2b-8fa1-e4fa23ece616"
+  ],
+  "recorded_at": "2026-01-01T13:56:04.279768"
+}

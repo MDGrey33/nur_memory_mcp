@@ -1,0 +1,48 @@
+{
+  "doc_id": "meetings/meeting_005.txt",
+  "events": [
+    {
+      "event_id": "evt_77a988ac-a862-48bf-9e21-3495caccba3f",
+      "category": "Commitment",
+      "narrative": "Bob committed to having enterprise features ready by Q3.",
+      "confidence": 0.9,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_82373f4c-1ad4-4f4c-8104-d7843c287303",
+      "category": "Execution",
+      "narrative": "Engineering completed 85% of planned features.",
+      "confidence": 0.85,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_99b6642d-fc3f-4861-ab48-a1f1d5c35ff8",
+      "category": "Decision",
+      "narrative": "James decided to reduce non-essential spending by 15% starting April.",
+      "confidence": 0.9,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_7ac490ab-7ecf-4c3b-bd73-c26a9b6960b3",
+      "category": "Collaboration",
+      "narrative": "The team agreed to revisit hiring plans after Q2 results are in.",
+      "confidence": 0.8,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_d7ca520e-ccfe-475b-b49c-90d18cdf4167",
+      "category": "QualityRisk",
+      "narrative": "Competitor XYZ launched a similar product last week.",
+      "confidence": 0.75,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_562f6e1c-bbcf-4927-ab20-6457680cf0ab",
+      "category": "Stakeholder",
+      "narrative": "Attendees of the executive review included Alice Chen, Bob Smith, James Wong, and Karen Liu.",
+      "confidence": 0.95,
+      "event_time": null
+    }
+  ],
+  "recorded_at": "2026-01-01T13:49:49.103639"
+}

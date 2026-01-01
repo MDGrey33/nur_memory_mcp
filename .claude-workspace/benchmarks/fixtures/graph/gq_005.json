@@ -1,0 +1,25 @@
+{
+  "query_id": "gq_005",
+  "connections": [
+    "Henry Adams",
+    "Iris Zhang",
+    "Grace Kim"
+  ],
+  "docs": [
+    "6798e41f-735a-49d5-9e66-a642e08641a0",
+    "7582b099-fa4c-4c4c-8e27-ba121628e9d1",
+    "art_7beae3dcd2ee",
+    "art_dee119ff3325",
+    "art_38ae53c80da3",
+    "art_2012fd729737",
+    "art_5f3a219381fb",
+    "art_a4730edf5bd6",
+    "art_c1e23487fca7",
+    "art_e1a8ff83d844",
+    "art_2faf57ed25f6",
+    "art_84a31eaf7c62",
+    "2fe74ead-8436-475a-8ede-934ec61e1308",
+    "7e1da5b1-fcd9-43ce-8e14-ccad6fa5f11e"
+  ],
+  "recorded_at": "2026-01-01T13:56:05.895425"
+}

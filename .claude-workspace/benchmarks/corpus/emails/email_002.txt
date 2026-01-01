@@ -1,0 +1,32 @@
+From: karen.liu@company.com
+To: james.wong@company.com
+CC: alice.chen@company.com
+Subject: Budget Revision - Q2 Planning
+Date: 2024-03-23
+
+James,
+
+Per your decision in Friday's executive review, I've prepared the revised budget
+projections reflecting the 15% reduction in non-essential spending.
+
+Key changes effective April 1st:
+- Travel budget: reduced from $50K to $35K
+- Conference attendance: paused until Q3
+- Contractor budgets: reduced by 20%
+
+Hiring Impact:
+- 3 open positions paused (marketing, sales, ops)
+- 2 critical engineering roles remain open (per your approval)
+
+Runway Analysis:
+- Current runway: 14 months (if growth targets missed)
+- Post-cuts runway: 18 months
+
+I recommend we revisit hiring plans after Q2 board meeting, as discussed.
+
+The Grace's marketing team has requested $5,000 additional for influencer outreach.
+I'll need your approval before releasing those funds.
+
+Best regards,
+Karen Liu
+CFO

@@ -1,0 +1,185 @@
+{
+  "version": "1.0",
+  "description": "Benchmark queries with ground truth relevance judgments for V7",
+  "queries": [
+    {
+      "id": "q001",
+      "query": "What is the product launch date?",
+      "type": "factual",
+      "expected_answer": "April 1st, 2024",
+      "relevant_documents": [
+        {"doc": "meetings/meeting_001.txt", "relevance": 3, "reason": "Primary source - Alice decided launch date"},
+        {"doc": "meetings/meeting_005.txt", "relevance": 2, "reason": "Confirms launch on track for April 1st"},
+        {"doc": "emails/email_001.txt", "relevance": 2, "reason": "Confirms launch date April 1st"}
+      ],
+      "relevant_events": ["evt_m001_1", "evt_m005_1"]
+    },
+    {
+      "id": "q002",
+      "query": "What are Bob's commitments and deadlines?",
+      "type": "entity_focused",
+      "expected_events": ["evt_m001_3", "evt_m002_9", "evt_m005_8"],
+      "relevant_documents": [
+        {"doc": "meetings/meeting_001.txt", "relevance": 3, "reason": "API refactor by March 25th"},
+        {"doc": "meetings/meeting_002.txt", "relevance": 3, "reason": "Database connection review by March 20th"},
+        {"doc": "meetings/meeting_005.txt", "relevance": 3, "reason": "Enterprise features by Q3"},
+        {"doc": "emails/email_001.txt", "relevance": 2, "reason": "Confirms API refactor deadline"}
+      ],
+      "relevant_entities": ["ent_bob"]
+    },
+    {
+      "id": "q003",
+      "query": "What risks and concerns were raised about the launch?",
+      "type": "category_search",
+      "category_filter": "QualityRisk",
+      "relevant_documents": [
+        {"doc": "meetings/meeting_002.txt", "relevance": 3, "reason": "Infrastructure and SLA concerns"},
+        {"doc": "meetings/meeting_003.txt", "relevance": 2, "reason": "Timeline risk from Frank"},
+        {"doc": "meetings/meeting_005.txt", "relevance": 3, "reason": "Burn rate, competitor, customer risks"},
+        {"doc": "emails/email_003.txt", "relevance": 2, "reason": "Connection pooling bottleneck"}
+      ],
+      "expected_events": ["evt_m002_2", "evt_m002_5", "evt_m002_6", "evt_m003_3", "evt_m005_3", "evt_m005_9", "evt_m005_10"]
+    },
+    {
+      "id": "q004",
+      "query": "What decisions were made about pricing?",
+      "type": "topic_search",
+      "relevant_documents": [
+        {"doc": "meetings/meeting_001.txt", "relevance": 3, "reason": "Freemium model decision"},
+        {"doc": "decisions/decision_002.txt", "relevance": 3, "reason": "Full pricing decision record"}
+      ],
+      "relevant_events": ["evt_m001_2", "evt_d002_1"]
+    },
+    {
+      "id": "q005",
+      "query": "What is the status of the caching layer?",
+      "type": "project_status",
+      "relevant_documents": [
+        {"doc": "meetings/meeting_002.txt", "relevance": 3, "reason": "80% complete, 3x improvement"},
+        {"doc": "conversations/conversation_001.txt", "relevance": 3, "reason": "Completed with 3.2x improvement"}
+      ],
+      "relevant_events": ["evt_m002_1", "evt_c001_1"],
+      "relevant_entities": ["ent_caching_layer", "ent_david"]
+    },
+    {
+      "id": "q006",
+      "query": "What budget changes were made?",
+      "type": "topic_search",
+      "relevant_documents": [
+        {"doc": "meetings/meeting_005.txt", "relevance": 3, "reason": "15% spending reduction decided"},
+        {"doc": "emails/email_002.txt", "relevance": 3, "reason": "Detailed budget breakdown"}
+      ],
+      "relevant_events": ["evt_m005_4", "evt_e002_1", "evt_e002_2"]
+    },
+    {
+      "id": "q007",
+      "query": "Who is responsible for the mobile app redesign?",
+      "type": "entity_focused",
+      "expected_answer": "Carol Davis (Design), Frank Lee (Mobile Lead)",
+      "relevant_documents": [
+        {"doc": "meetings/meeting_003.txt", "relevance": 3, "reason": "Design review meeting"},
+        {"doc": "decisions/decision_001.txt", "relevance": 3, "reason": "Decision record for redesign"}
+      ],
+      "relevant_entities": ["ent_carol", "ent_frank", "ent_mobile_redesign"]
+    },
+    {
+      "id": "q008",
+      "query": "What marketing activities are planned for launch?",
+      "type": "topic_search",
+      "relevant_documents": [
+        {"doc": "meetings/meeting_004.txt", "relevance": 3, "reason": "Marketing standup details"},
+        {"doc": "conversations/conversation_002.txt", "relevance": 3, "reason": "Marketing team coordination"}
+      ],
+      "relevant_events": ["evt_m004_1", "evt_m004_2", "evt_m004_3", "evt_c002_1", "evt_c002_6"],
+      "relevant_entities": ["ent_grace", "ent_henry", "ent_iris", "ent_launch_campaign"]
+    },
+    {
+      "id": "q009",
+      "query": "What infrastructure improvements were made?",
+      "type": "topic_search",
+      "relevant_documents": [
+        {"doc": "meetings/meeting_002.txt", "relevance": 3, "reason": "Auto-scaling decision"},
+        {"doc": "emails/email_003.txt", "relevance": 3, "reason": "PgBouncer decision"},
+        {"doc": "conversations/conversation_001.txt", "relevance": 3, "reason": "Implementation completion"}
+      ],
+      "relevant_events": ["evt_m002_4", "evt_e003_1", "evt_c001_2", "evt_c001_3"]
+    },
+    {
+      "id": "q010",
+      "query": "What is happening with TechCorp partnership?",
+      "type": "entity_focused",
+      "relevant_documents": [
+        {"doc": "meetings/meeting_005.txt", "relevance": 3, "reason": "Partnership discussions mentioned"}
+      ],
+      "relevant_events": ["evt_m005_6"],
+      "relevant_entities": ["ent_techcorp", "ent_james"]
+    },
+    {
+      "id": "q011",
+      "query": "What commitments are due this week (March 18-24)?",
+      "type": "time_filtered",
+      "time_range": {"from": "2024-03-18", "to": "2024-03-24"},
+      "relevant_documents": [
+        {"doc": "meetings/meeting_001.txt", "relevance": 3, "reason": "Carol March 20, Alice March 18"},
+        {"doc": "meetings/meeting_002.txt", "relevance": 3, "reason": "David March 22, Emma March 23, Bob March 20"},
+        {"doc": "meetings/meeting_003.txt", "relevance": 3, "reason": "Carol March 22, Frank March 21"}
+      ],
+      "expected_events": ["evt_m001_4", "evt_m001_5", "evt_m002_7", "evt_m002_8", "evt_m002_9", "evt_m003_4", "evt_m003_5"]
+    },
+    {
+      "id": "q012",
+      "query": "What did Emma work on?",
+      "type": "entity_focused",
+      "relevant_documents": [
+        {"doc": "meetings/meeting_002.txt", "relevance": 3, "reason": "Auto-scaling and load testing"},
+        {"doc": "emails/email_003.txt", "relevance": 2, "reason": "PgBouncer assignment"},
+        {"doc": "conversations/conversation_001.txt", "relevance": 3, "reason": "Completion updates"}
+      ],
+      "relevant_events": ["evt_m002_2", "evt_m002_8", "evt_e003_3", "evt_c001_2", "evt_c001_3"],
+      "relevant_entities": ["ent_emma"]
+    },
+    {
+      "id": "q013",
+      "query": "What concerns did Karen raise?",
+      "type": "entity_focused",
+      "relevant_documents": [
+        {"doc": "meetings/meeting_005.txt", "relevance": 3, "reason": "Burn rate concerns"}
+      ],
+      "relevant_events": ["evt_m005_3"],
+      "relevant_entities": ["ent_karen"]
+    },
+    {
+      "id": "q014",
+      "query": "Graph expansion: Find all events connected to Alice",
+      "type": "graph_expansion",
+      "seed_entity": "ent_alice",
+      "expected_connected_entities": ["ent_bob", "ent_carol", "ent_frank", "ent_henry", "ent_james"],
+      "expected_connected_events": ["evt_m001_1", "evt_m001_2", "evt_m001_5", "evt_m003_2", "evt_d001_1", "evt_c001_4", "evt_c002_1"],
+      "min_connections": 5
+    },
+    {
+      "id": "q015",
+      "query": "What is the relationship between David and Bob?",
+      "type": "relationship_query",
+      "relevant_documents": [
+        {"doc": "meetings/meeting_002.txt", "relevance": 3, "reason": "Bob manages David's priorities"},
+        {"doc": "emails/email_003.txt", "relevance": 2, "reason": "Bob directing David's work"},
+        {"doc": "conversations/conversation_001.txt", "relevance": 2, "reason": "Bob reviewing David's work"}
+      ],
+      "expected_relationship": "Bob manages David and sets his priorities"
+    }
+  ],
+  "statistics": {
+    "total_queries": 15,
+    "by_type": {
+      "factual": 1,
+      "entity_focused": 5,
+      "category_search": 1,
+      "topic_search": 4,
+      "project_status": 1,
+      "time_filtered": 1,
+      "graph_expansion": 1,
+      "relationship_query": 1
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "doc_id": "emails/email_003.txt",
+  "events": [
+    {
+      "event_id": "evt_4ab28801-1d7c-4ced-85c7-77987f924e14",
+      "category": "Execution",
+      "narrative": "Bob completed his review of the database connection strategy.",
+      "confidence": 0.9,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_b2ce42af-77f0-4efc-acec-3243a564fb80",
+      "category": "Decision",
+      "narrative": "Bob decided to implement PgBouncer before launch.",
+      "confidence": 0.95,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_1831dfb4-80bd-4f2b-8fa1-e4fa23ece616",
+      "category": "QualityRisk",
+      "narrative": "Bob escalated the payment API SLA concern to Alice Chen, indicating a potential need for a fallback payment processor.",
+      "confidence": 0.85,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_86123070-5e26-49fd-be76-3a4578379d91",
+      "category": "Commitment",
+      "narrative": "Emma is to add PgBouncer to the auto-scaling work by March 23rd.",
+      "confidence": 0.9,
+      "event_time": "2024-03-23 00:00:00+00:00"
+    },
+    {
+      "event_id": "evt_406e363e-3e96-4f23-af7c-584e936f0524",
+      "category": "Commitment",
+      "narrative": "David is on track to complete the caching layer by March 22nd.",
+      "confidence": 0.9,
+      "event_time": "2024-03-22 00:00:00+00:00"
+    },
+    {
+      "event_id": "evt_7384c0aa-62d7-4386-ad2a-ee377f4f7953",
+      "category": "Collaboration",
+      "narrative": "Bob suggested discussing implementation details in tomorrow's standup.",
+      "confidence": 0.9,
+      "event_time": "2024-03-21 00:00:00+00:00"
+    }
+  ],
+  "recorded_at": "2026-01-01T13:52:25.173327"
+}

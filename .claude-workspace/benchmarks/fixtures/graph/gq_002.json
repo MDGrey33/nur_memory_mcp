@@ -1,0 +1,40 @@
+{
+  "query_id": "gq_002",
+  "connections": [
+    "Bob Smith",
+    "Emma Wilson",
+    "David Park",
+    "Alice Chen",
+    "Carol Davis",
+    "PgBouncer"
+  ],
+  "docs": [
+    "2125195f-bec2-4dad-b29b-8aaf65cc9a78",
+    "355cd07f-5383-40c7-8e14-a948c0c96576",
+    "5636eb64-0240-4e02-891a-057631b98e8f",
+    "655ed8e7-5f97-4ea1-97f8-a4214696875c",
+    "77a988ac-a862-48bf-9e21-3495caccba3f",
+    "b3a4382e-88c8-4559-8110-0543e237c091",
+    "b3cb6977-9d7d-4796-bf34-8bbc16cf6e91",
+    "b4c10761-3089-43cb-8dbf-c085afa5eaeb",
+    "d5e7102d-90cd-4d98-8bc4-d91e2a65ed11",
+    "ef23000d-577e-4e94-a1fd-549424ace2bb",
+    "art_a4730edf5bd6",
+    "art_2012fd729737",
+    "art_5f3a219381fb",
+    "art_e1a8ff83d844",
+    "art_016ef8d63534",
+    "art_93bf879580a6",
+    "art_7beae3dcd2ee",
+    "art_dee119ff3325",
+    "art_38ae53c80da3",
+    "art_84a31eaf7c62",
+    "4671f30b-0fdd-428d-a0a7-8bde6966490d",
+    "bcb232d3-4277-428f-9aff-574c9052801d",
+    "7384c0aa-62d7-4386-ad2a-ee377f4f7953",
+    "1831dfb4-80bd-4f2b-8fa1-e4fa23ece616",
+    "b2ce42af-77f0-4efc-acec-3243a564fb80",
+    "4ab28801-1d7c-4ced-85c7-77987f924e14"
+  ],
+  "recorded_at": "2026-01-01T13:56:04.623602"
+}

@@ -1,0 +1,55 @@
+{
+  "doc_id": "meetings/meeting_002.txt",
+  "events": [
+    {
+      "event_id": "evt_4e4a1176-be69-4f0a-aed5-46eafb47801d",
+      "category": "QualityRisk",
+      "narrative": "Database connection pooling may become a bottleneck.",
+      "confidence": 0.8,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_655ed8e7-5f97-4ea1-97f8-a4214696875c",
+      "category": "QualityRisk",
+      "narrative": "Emma flagged a concern about the current infrastructure's ability to handle expected load during launch week.",
+      "confidence": 0.85,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_9fe99139-91de-4767-9629-08757ea02375",
+      "category": "QualityRisk",
+      "narrative": "Third-party payment API has 99.5% SLA, which may not be sufficient.",
+      "confidence": 0.8,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_fba60139-7566-4171-be01-c6464c6aac0a",
+      "category": "Execution",
+      "narrative": "David reported the new caching layer is 80% complete.",
+      "confidence": 0.9,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_b4c10761-3089-43cb-8dbf-c085afa5eaeb",
+      "category": "Decision",
+      "narrative": "Bob decided to prioritize the caching work over new features.",
+      "confidence": 0.9,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_b3cb6977-9d7d-4796-bf34-8bbc16cf6e91",
+      "category": "Commitment",
+      "narrative": "Emma will configure auto-scaling by March 23rd.",
+      "confidence": 0.9,
+      "event_time": "2024-03-23 00:00:00+00:00"
+    },
+    {
+      "event_id": "evt_5636eb64-0240-4e02-891a-057631b98e8f",
+      "category": "Commitment",
+      "narrative": "David will focus exclusively on caching work until March 22nd.",
+      "confidence": 0.9,
+      "event_time": "2024-03-22 00:00:00+00:00"
+    }
+  ],
+  "recorded_at": "2026-01-01T13:47:25.308315"
+}

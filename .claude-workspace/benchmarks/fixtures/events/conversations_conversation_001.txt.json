@@ -1,0 +1,62 @@
+{
+  "doc_id": "conversations/conversation_001.txt",
+  "events": [
+    {
+      "event_id": "evt_17e64ff5-392b-4f2f-872f-0d02241072ff",
+      "category": "Execution",
+      "narrative": "Alice confirmed that she would get the contract signed today.",
+      "confidence": 0.95,
+      "event_time": "2024-03-21 10:42:00+00:00"
+    },
+    {
+      "event_id": "evt_355cd07f-5383-40c7-8e14-a948c0c96576",
+      "category": "Decision",
+      "narrative": "Bob decided that the 99.9% SLA is worth it for launch week peace of mind.",
+      "confidence": 0.95,
+      "event_time": "2024-03-21 10:40:00+00:00"
+    },
+    {
+      "event_id": "evt_4671f30b-0fdd-428d-a0a7-8bde6966490d",
+      "category": "Commitment",
+      "narrative": "Alice confirmed that the payment provider can offer a 99.9% SLA for the enterprise tier and asked Bob if it's worth the extra cost.",
+      "confidence": 0.95,
+      "event_time": "2024-03-21 10:37:00+00:00"
+    },
+    {
+      "event_id": "evt_ef23000d-577e-4e94-a1fd-549424ace2bb",
+      "category": "Decision",
+      "narrative": "Bob decided to hold off on the payment fallback integration while Alice checks with the payment provider about SLA guarantees.",
+      "confidence": 0.9,
+      "event_time": "2024-03-21 10:35:00+00:00"
+    },
+    {
+      "event_id": "evt_becd19c2-0735-4c58-b061-2a4aa1bff98e",
+      "category": "Execution",
+      "narrative": "Emma confirmed that PgBouncer was configured with a connection pool set to 100.",
+      "confidence": 0.95,
+      "event_time": "2024-03-21 10:28:00+00:00"
+    },
+    {
+      "event_id": "evt_38fbbf56-232a-4c1c-83a7-9002960053ad",
+      "category": "Execution",
+      "narrative": "Emma finished setting up the auto-scaling configuration, allowing the system to handle 5x the current load automatically.",
+      "confidence": 0.95,
+      "event_time": "2024-03-21 10:22:00+00:00"
+    },
+    {
+      "event_id": "evt_bcb232d3-4277-428f-9aff-574c9052801d",
+      "category": "Collaboration",
+      "narrative": "Bob acknowledged David's work and committed to reviewing the PR in the afternoon.",
+      "confidence": 0.9,
+      "event_time": "2024-03-21 10:18:00+00:00"
+    },
+    {
+      "event_id": "evt_6b92f5f6-3897-4ec7-903c-cae9cc379343",
+      "category": "Execution",
+      "narrative": "David completed the caching layer and performance tests showed a 3.2x improvement in response times.",
+      "confidence": 0.95,
+      "event_time": "2024-03-21 10:15:00+00:00"
+    }
+  ],
+  "recorded_at": "2026-01-01T13:54:26.820165"
+}

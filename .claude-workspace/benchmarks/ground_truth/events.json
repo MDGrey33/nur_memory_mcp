@@ -1,0 +1,526 @@
+{
+  "version": "1.0",
+  "description": "Ground truth events for V7 benchmark corpus",
+  "documents": {
+    "meetings/meeting_001.txt": {
+      "events": [
+        {
+          "id": "evt_m001_1",
+          "category": "Decision",
+          "narrative": "Alice decided to launch on April 1st",
+          "actor": "Alice Chen",
+          "evidence_quote": "After discussion, Alice decided we will launch on April 1st"
+        },
+        {
+          "id": "evt_m001_2",
+          "category": "Decision",
+          "narrative": "Team agreed to use freemium pricing model",
+          "actor": "Team",
+          "evidence_quote": "The team agreed to go with a freemium model"
+        },
+        {
+          "id": "evt_m001_3",
+          "category": "Commitment",
+          "narrative": "Bob committed to complete API refactor by March 25th",
+          "actor": "Bob Smith",
+          "subject": "API refactor",
+          "due_date": "2024-03-25",
+          "evidence_quote": "Bob: Complete API refactor by March 25th"
+        },
+        {
+          "id": "evt_m001_4",
+          "category": "Commitment",
+          "narrative": "Carol committed to finalize UI mockups by March 20th",
+          "actor": "Carol Davis",
+          "subject": "UI mockups",
+          "due_date": "2024-03-20",
+          "evidence_quote": "Carol: Finalize UI mockups by March 20th"
+        },
+        {
+          "id": "evt_m001_5",
+          "category": "Commitment",
+          "narrative": "Alice committed to send launch announcement draft by March 18th",
+          "actor": "Alice Chen",
+          "subject": "launch announcement",
+          "due_date": "2024-03-18",
+          "evidence_quote": "Alice: Send launch announcement draft by March 18th"
+        }
+      ]
+    },
+    "meetings/meeting_002.txt": {
+      "events": [
+        {
+          "id": "evt_m002_1",
+          "category": "Execution",
+          "narrative": "David reported caching layer is 80% complete with 3x performance improvement",
+          "actor": "David Park",
+          "evidence_quote": "David reported the new caching layer is 80% complete. Performance tests show 3x improvement"
+        },
+        {
+          "id": "evt_m002_2",
+          "category": "QualityRisk",
+          "narrative": "Emma flagged infrastructure may not handle launch week load",
+          "actor": "Emma Wilson",
+          "evidence_quote": "Emma flagged a concern: our current infrastructure might not handle the expected load during launch week"
+        },
+        {
+          "id": "evt_m002_3",
+          "category": "Decision",
+          "narrative": "Bob decided to prioritize caching over new features",
+          "actor": "Bob Smith",
+          "evidence_quote": "Bob decided to prioritize the caching work over new features"
+        },
+        {
+          "id": "evt_m002_4",
+          "category": "Decision",
+          "narrative": "Team agreed to implement auto-scaling before launch",
+          "actor": "Team",
+          "evidence_quote": "The team agreed to implement auto-scaling before launch"
+        },
+        {
+          "id": "evt_m002_5",
+          "category": "QualityRisk",
+          "narrative": "Database connection pooling may become bottleneck",
+          "actor": null,
+          "evidence_quote": "Database connection pooling may become a bottleneck"
+        },
+        {
+          "id": "evt_m002_6",
+          "category": "QualityRisk",
+          "narrative": "Third-party payment API SLA of 99.5% may be insufficient",
+          "actor": null,
+          "evidence_quote": "Third-party payment API has 99.5% SLA, which may not be sufficient"
+        },
+        {
+          "id": "evt_m002_7",
+          "category": "Commitment",
+          "narrative": "David committed to complete caching layer by March 22nd",
+          "actor": "David Park",
+          "due_date": "2024-03-22",
+          "evidence_quote": "David: Complete caching layer by March 22nd"
+        },
+        {
+          "id": "evt_m002_8",
+          "category": "Commitment",
+          "narrative": "Emma committed to set up auto-scaling by March 23rd",
+          "actor": "Emma Wilson",
+          "due_date": "2024-03-23",
+          "evidence_quote": "Emma: Set up auto-scaling and load testing by March 23rd"
+        },
+        {
+          "id": "evt_m002_9",
+          "category": "Commitment",
+          "narrative": "Bob committed to review database connection strategy by March 20th",
+          "actor": "Bob Smith",
+          "due_date": "2024-03-20",
+          "evidence_quote": "Bob: Review database connection strategy by March 20th"
+        }
+      ]
+    },
+    "meetings/meeting_003.txt": {
+      "events": [
+        {
+          "id": "evt_m003_1",
+          "category": "Decision",
+          "narrative": "Team decided on Option A (card-based layout) for mobile home screen",
+          "actor": "Team",
+          "evidence_quote": "the team decided to go with Option A"
+        },
+        {
+          "id": "evt_m003_2",
+          "category": "Feedback",
+          "narrative": "Alice requested notification badge on main action button",
+          "actor": "Alice Chen",
+          "evidence_quote": "Alice requested adding a notification badge to the main action button"
+        },
+        {
+          "id": "evt_m003_3",
+          "category": "QualityRisk",
+          "narrative": "Frank worried about timeline - estimates 2 extra weeks needed",
+          "actor": "Frank Lee",
+          "evidence_quote": "Frank is worried about the timeline. The new design requires significant refactoring of the navigation stack. He estimates 2 extra weeks needed"
+        },
+        {
+          "id": "evt_m003_4",
+          "category": "Commitment",
+          "narrative": "Carol committed to deliver updated mockups with notification badge by March 22nd",
+          "actor": "Carol Davis",
+          "due_date": "2024-03-22",
+          "evidence_quote": "Carol: Deliver updated mockups with notification badge by March 22nd"
+        },
+        {
+          "id": "evt_m003_5",
+          "category": "Commitment",
+          "narrative": "Frank committed to send timeline breakdown by March 21st EOD",
+          "actor": "Frank Lee",
+          "due_date": "2024-03-21",
+          "evidence_quote": "Frank: Send timeline breakdown by March 21st EOD"
+        }
+      ]
+    },
+    "meetings/meeting_004.txt": {
+      "events": [
+        {
+          "id": "evt_m004_1",
+          "category": "Execution",
+          "narrative": "Grace reported launch campaign materials are 90% ready",
+          "actor": "Grace Kim",
+          "evidence_quote": "Launch campaign materials are 90% ready"
+        },
+        {
+          "id": "evt_m004_2",
+          "category": "Execution",
+          "narrative": "Henry completed blog post draft, needs technical review from Alice",
+          "actor": "Henry Adams",
+          "evidence_quote": "Blog post draft is complete. Need Alice to review"
+        },
+        {
+          "id": "evt_m004_3",
+          "category": "Execution",
+          "narrative": "Iris has 15 social media posts scheduled for launch week",
+          "actor": "Iris Zhang",
+          "evidence_quote": "We have 15 posts scheduled for launch week"
+        },
+        {
+          "id": "evt_m004_4",
+          "category": "Decision",
+          "narrative": "Team decided to delay press release to April 3rd for Product Hunt alignment",
+          "actor": "Team",
+          "evidence_quote": "The team agreed to delay the press release by 2 days to align with the product hunt launch. New date is April 3rd"
+        },
+        {
+          "id": "evt_m004_5",
+          "category": "Decision",
+          "narrative": "Grace decided to allocate $5,000 additional budget for influencer outreach",
+          "actor": "Grace Kim",
+          "evidence_quote": "Grace decided to allocate $5,000 additional budget for influencer outreach"
+        },
+        {
+          "id": "evt_m004_6",
+          "category": "Commitment",
+          "narrative": "Grace committed to finalize influencer list and contracts by March 26th",
+          "actor": "Grace Kim",
+          "due_date": "2024-03-26",
+          "evidence_quote": "Grace: Finalize influencer list and contracts by March 26th"
+        }
+      ]
+    },
+    "meetings/meeting_005.txt": {
+      "events": [
+        {
+          "id": "evt_m005_1",
+          "category": "Execution",
+          "narrative": "Product launch on track for April 1st",
+          "actor": null,
+          "evidence_quote": "Product launch on track for April 1st"
+        },
+        {
+          "id": "evt_m005_2",
+          "category": "Execution",
+          "narrative": "Engineering completed 85% of planned features",
+          "actor": null,
+          "evidence_quote": "Engineering completed 85% of planned features"
+        },
+        {
+          "id": "evt_m005_3",
+          "category": "QualityRisk",
+          "narrative": "Karen raised concerns about burn rate - 14 month runway if growth targets missed",
+          "actor": "Karen Liu",
+          "evidence_quote": "Karen raised concerns about the burn rate. Current projections show runway of 14 months if growth targets aren't met"
+        },
+        {
+          "id": "evt_m005_4",
+          "category": "Decision",
+          "narrative": "James decided to reduce non-essential spending by 15% starting April",
+          "actor": "James Wong",
+          "evidence_quote": "James decided to reduce non-essential spending by 15% starting April"
+        },
+        {
+          "id": "evt_m005_5",
+          "category": "Decision",
+          "narrative": "Team agreed to pause open positions except critical engineering roles",
+          "actor": "Team",
+          "evidence_quote": "Current open positions will be paused except for critical engineering roles"
+        },
+        {
+          "id": "evt_m005_6",
+          "category": "Stakeholder",
+          "narrative": "James announced partnership discussions with TechCorp progressing",
+          "actor": "James Wong",
+          "evidence_quote": "James announced partnership discussions with TechCorp are progressing"
+        },
+        {
+          "id": "evt_m005_7",
+          "category": "Decision",
+          "narrative": "Board approved moving forward with enterprise tier",
+          "actor": "Board",
+          "evidence_quote": "The board has approved moving forward with the enterprise tier"
+        },
+        {
+          "id": "evt_m005_8",
+          "category": "Commitment",
+          "narrative": "Bob committed to have enterprise features ready by Q3",
+          "actor": "Bob Smith",
+          "due_date": "2024-Q3",
+          "evidence_quote": "Bob committed to having enterprise features ready by Q3"
+        },
+        {
+          "id": "evt_m005_9",
+          "category": "QualityRisk",
+          "narrative": "Competitor XYZ launched similar product",
+          "actor": null,
+          "evidence_quote": "Competitor XYZ launched similar product last week"
+        },
+        {
+          "id": "evt_m005_10",
+          "category": "QualityRisk",
+          "narrative": "Key customer Acme Corp evaluating alternatives",
+          "actor": null,
+          "evidence_quote": "Key customer Acme Corp is evaluating alternatives"
+        },
+        {
+          "id": "evt_m005_11",
+          "category": "Commitment",
+          "narrative": "Alice committed to prepare competitive analysis by March 28th",
+          "actor": "Alice Chen",
+          "due_date": "2024-03-28",
+          "evidence_quote": "Alice: Prepare competitive analysis by March 28th"
+        },
+        {
+          "id": "evt_m005_12",
+          "category": "Commitment",
+          "narrative": "Karen committed to send revised budget projections by March 25th",
+          "actor": "Karen Liu",
+          "due_date": "2024-03-25",
+          "evidence_quote": "Karen: Send revised budget projections by March 25th"
+        }
+      ]
+    },
+    "emails/email_001.txt": {
+      "events": [
+        {
+          "id": "evt_e001_1",
+          "category": "Commitment",
+          "narrative": "API refactor deadline confirmed as March 25th with Bob leading",
+          "actor": "Bob Smith",
+          "due_date": "2024-03-25",
+          "evidence_quote": "API refactor deadline: March 25th (Bob leading)"
+        },
+        {
+          "id": "evt_e001_2",
+          "category": "Decision",
+          "narrative": "David's caching work prioritized over new features until March 22nd",
+          "actor": null,
+          "evidence_quote": "David's caching work takes priority over new features until March 22nd"
+        }
+      ]
+    },
+    "emails/email_002.txt": {
+      "events": [
+        {
+          "id": "evt_e002_1",
+          "category": "Execution",
+          "narrative": "Karen prepared revised budget with 15% reduction in non-essential spending",
+          "actor": "Karen Liu",
+          "evidence_quote": "I've prepared the revised budget projections reflecting the 15% reduction"
+        },
+        {
+          "id": "evt_e002_2",
+          "category": "Decision",
+          "narrative": "Travel budget reduced from $50K to $35K",
+          "actor": null,
+          "evidence_quote": "Travel budget: reduced from $50K to $35K"
+        },
+        {
+          "id": "evt_e002_3",
+          "category": "Decision",
+          "narrative": "3 positions paused, 2 critical engineering roles remain open",
+          "actor": null,
+          "evidence_quote": "3 open positions paused (marketing, sales, ops)"
+        },
+        {
+          "id": "evt_e002_4",
+          "category": "Execution",
+          "narrative": "Post-cuts runway extended to 18 months",
+          "actor": null,
+          "evidence_quote": "Post-cuts runway: 18 months"
+        }
+      ]
+    },
+    "emails/email_003.txt": {
+      "events": [
+        {
+          "id": "evt_e003_1",
+          "category": "Decision",
+          "narrative": "Bob decided to implement PgBouncer before launch",
+          "actor": "Bob Smith",
+          "evidence_quote": "We need to implement PgBouncer before launch"
+        },
+        {
+          "id": "evt_e003_2",
+          "category": "QualityRisk",
+          "narrative": "Current max connections of 20 will bottleneck at 500+ concurrent users",
+          "actor": null,
+          "evidence_quote": "Max connections: 20 (will bottleneck at 500+ concurrent users)"
+        },
+        {
+          "id": "evt_e003_3",
+          "category": "Commitment",
+          "narrative": "Emma assigned to add PgBouncer to infrastructure work by March 23rd",
+          "actor": "Emma Wilson",
+          "due_date": "2024-03-23",
+          "evidence_quote": "Emma: Add PgBouncer to auto-scaling work (due March 23rd)"
+        }
+      ]
+    },
+    "decisions/decision_001.txt": {
+      "events": [
+        {
+          "id": "evt_d001_1",
+          "category": "Decision",
+          "narrative": "Selected Option A (card-based layout) for mobile home screen based on 73% user preference",
+          "actor": "Alice Chen",
+          "evidence_quote": "Selected: Option A (Card-based layout)"
+        },
+        {
+          "id": "evt_d001_2",
+          "category": "QualityRisk",
+          "narrative": "Frank estimates 2 extra weeks needed for navigation stack refactoring",
+          "actor": "Frank Lee",
+          "evidence_quote": "Frank estimates 2 extra weeks needed"
+        },
+        {
+          "id": "evt_d001_3",
+          "category": "Change",
+          "narrative": "Notification badge added to design requiring backend changes",
+          "actor": null,
+          "evidence_quote": "Added notification badge to main action button"
+        }
+      ]
+    },
+    "decisions/decision_002.txt": {
+      "events": [
+        {
+          "id": "evt_d002_1",
+          "category": "Decision",
+          "narrative": "Selected freemium pricing model for product launch",
+          "actor": "Alice Chen",
+          "evidence_quote": "Selected: Freemium Model"
+        },
+        {
+          "id": "evt_d002_2",
+          "category": "QualityRisk",
+          "narrative": "Bob raised infrastructure cost concerns for free tier users",
+          "actor": "Bob Smith",
+          "evidence_quote": "Bob raised infrastructure cost concerns"
+        },
+        {
+          "id": "evt_d002_3",
+          "category": "Execution",
+          "narrative": "Alice confirmed budget approval for additional infrastructure",
+          "actor": "Alice Chen",
+          "evidence_quote": "Alice confirmed budget approval for additional infrastructure"
+        }
+      ]
+    },
+    "conversations/conversation_001.txt": {
+      "events": [
+        {
+          "id": "evt_c001_1",
+          "category": "Execution",
+          "narrative": "David completed caching layer with 3.2x performance improvement",
+          "actor": "David Park",
+          "evidence_quote": "Caching layer is done! Performance tests show 3.2x improvement"
+        },
+        {
+          "id": "evt_c001_2",
+          "category": "Execution",
+          "narrative": "Emma finished auto-scaling config - can handle 5x current load",
+          "actor": "Emma Wilson",
+          "evidence_quote": "I just finished setting up the auto-scaling config. We can now handle 5x current load"
+        },
+        {
+          "id": "evt_c001_3",
+          "category": "Execution",
+          "narrative": "PgBouncer configured with connection pool of 100 for 2000+ concurrent users",
+          "actor": "Emma Wilson",
+          "evidence_quote": "PgBouncer is configured. Connection pool set to 100. Should handle 2000+ concurrent users"
+        },
+        {
+          "id": "evt_c001_4",
+          "category": "Decision",
+          "narrative": "Alice secured 99.9% SLA from payment provider for $500/month",
+          "actor": "Alice Chen",
+          "evidence_quote": "Payment provider confirmed they can offer 99.9% SLA for enterprise tier. Cost is $500/month"
+        },
+        {
+          "id": "evt_c001_5",
+          "category": "Decision",
+          "narrative": "Bob approved enterprise SLA upgrade for launch week",
+          "actor": "Bob Smith",
+          "evidence_quote": "Definitely worth it for launch week peace of mind. Let's do it"
+        }
+      ]
+    },
+    "conversations/conversation_002.txt": {
+      "events": [
+        {
+          "id": "evt_c002_1",
+          "category": "Execution",
+          "narrative": "Henry's blog post approved by Alice",
+          "actor": "Alice Chen",
+          "evidence_quote": "Blog post is approved! Alice signed off on the technical sections"
+        },
+        {
+          "id": "evt_c002_2",
+          "category": "Execution",
+          "narrative": "Iris prepared 5 backup social posts for potential delays",
+          "actor": "Iris Zhang",
+          "evidence_quote": "Also prepared 5 backup posts in case we need to delay"
+        },
+        {
+          "id": "evt_c002_3",
+          "category": "Decision",
+          "narrative": "Press release moved to April 3rd for Product Hunt alignment",
+          "actor": "Grace Kim",
+          "evidence_quote": "press release moved to April 3rd to align with Product Hunt launch"
+        },
+        {
+          "id": "evt_c002_4",
+          "category": "Execution",
+          "narrative": "Grace got $5K influencer budget approval from Karen",
+          "actor": "Grace Kim",
+          "evidence_quote": "I got approval for $5K additional influencer budget from Karen"
+        },
+        {
+          "id": "evt_c002_5",
+          "category": "Commitment",
+          "narrative": "Iris committed to have influencer contracts ready by March 26th",
+          "actor": "Iris Zhang",
+          "due_date": "2024-03-26",
+          "evidence_quote": "Will have contracts ready by March 26th"
+        },
+        {
+          "id": "evt_c002_6",
+          "category": "Execution",
+          "narrative": "Carol delivered product screenshots",
+          "actor": "Carol Davis",
+          "evidence_quote": "product screenshots are ready! Just uploaded to the shared drive"
+        }
+      ]
+    }
+  },
+  "statistics": {
+    "total_documents": 12,
+    "total_events": 63,
+    "events_by_category": {
+      "Decision": 19,
+      "Commitment": 15,
+      "Execution": 16,
+      "QualityRisk": 10,
+      "Feedback": 1,
+      "Stakeholder": 1,
+      "Change": 1
+    }
+  }
+}

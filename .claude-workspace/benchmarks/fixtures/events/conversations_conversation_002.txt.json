@@ -1,0 +1,41 @@
+{
+  "doc_id": "conversations/conversation_002.txt",
+  "events": [
+    {
+      "event_id": "evt_8fd913c9-734a-4f23-9ef5-314d81dad58b",
+      "category": "Execution",
+      "narrative": "Carol uploaded product screenshots to the shared drive.",
+      "confidence": 0.9,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_7e1da5b1-fcd9-43ce-8e14-ccad6fa5f11e",
+      "category": "Collaboration",
+      "narrative": "Grace coordinated with Henry and Iris to update all materials with the new screenshots by end of day.",
+      "confidence": 0.85,
+      "event_time": null
+    },
+    {
+      "event_id": "evt_d4cc5976-9e19-4a80-90be-78a257cfe73c",
+      "category": "Change",
+      "narrative": "The press release date was moved to April 3rd to align with the Product Hunt launch.",
+      "confidence": 0.9,
+      "event_time": "2024-04-03 00:00:00+00:00"
+    },
+    {
+      "event_id": "evt_7582b099-fa4c-4c4c-8e27-ba121628e9d1",
+      "category": "Commitment",
+      "narrative": "Alice signed off on the technical sections of the blog post, which is ready to publish on April 1st.",
+      "confidence": 0.9,
+      "event_time": "2024-04-01 00:00:00+00:00"
+    },
+    {
+      "event_id": "evt_6798e41f-735a-49d5-9e66-a642e08641a0",
+      "category": "Commitment",
+      "narrative": "Iris will have contracts ready for the influencers by March 26th.",
+      "confidence": 0.85,
+      "event_time": "2024-03-26 00:00:00+00:00"
+    }
+  ],
+  "recorded_at": "2026-01-01T13:55:07.920258"
+}
