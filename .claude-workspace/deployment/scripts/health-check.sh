@@ -10,7 +10,7 @@
 #   ./scripts/health-check.sh [environment] [options]
 #
 # Arguments:
-#   environment   Target environment: test (default), staging, or prod
+#   environment   Target environment: prod (default), staging, or test
 #
 # Options:
 #   --wait        Wait for services to become healthy
@@ -20,7 +20,7 @@
 #   --v5-check    Validate V5-specific features (collections, tools)
 #
 # Examples:
-#   ./scripts/health-check.sh              # Check test environment
+#   ./scripts/health-check.sh              # Check prod environment
 #   ./scripts/health-check.sh staging      # Check staging environment
 #   ./scripts/health-check.sh test --wait  # Wait for test to be healthy
 #   ./scripts/health-check.sh --json       # Output as JSON
@@ -152,7 +152,7 @@ parse_args() {
 
     # Default environment
     if [[ -z "$ENVIRONMENT" ]]; then
-        ENVIRONMENT="test"
+        ENVIRONMENT="prod"
     fi
 }
 
@@ -162,7 +162,7 @@ show_help() {
     echo "MCP Memory Server V5 Health Check Script"
     echo ""
     echo "Arguments:"
-    echo "  environment    test, staging, or prod (default: test)"
+    echo "  environment    prod, staging, or test (default: prod)"
     echo ""
     echo "Options:"
     echo "  --wait, -w     Wait for services to become healthy"

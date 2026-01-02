@@ -10,12 +10,13 @@
 #   ./scripts/env-up.sh [environment]
 #
 # Arguments:
-#   environment   Target environment: test (default), staging, or prod
+#   environment   Target environment: prod (default), staging, or test
 #
 # Examples:
-#   ./scripts/env-up.sh           # Start test environment
-#   ./scripts/env-up.sh test      # Start test environment
+#   ./scripts/env-up.sh           # Start prod environment
+#   ./scripts/env-up.sh prod      # Start prod environment
 #   ./scripts/env-up.sh staging   # Start staging environment
+#   ./scripts/env-up.sh test      # Start test environment
 #
 # Exit codes:
 #   0 - Success
@@ -33,31 +34,36 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Default values
-ENVIRONMENT="${1:-dev}"
+ENVIRONMENT="${1:-prod}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOYMENT_DIR="$(dirname "$SCRIPT_DIR")"
-PROJECT_ROOT="$(dirname "$DEPLOYMENT_DIR")"
 HEALTH_TIMEOUT=120
 
-# Port lookup functions (bash 3.x compatible)
+# Port lookup functions per ADR-005
+# prod: 3001, 8001, 5432
+# staging: 3101, 8101, 5532
+# test: 3201, 8201, 5632
 get_mcp_port() {
     case "$1" in
-        dev) echo 3001 ;;
-        prod) echo 3001 ;;  # Using 3001, change to 3000 if available
+        prod) echo 3001 ;;
+        staging) echo 3101 ;;
+        test) echo 3201 ;;
     esac
 }
 
 get_chroma_port() {
     case "$1" in
-        dev) echo 8001 ;;
         prod) echo 8001 ;;
+        staging) echo 8101 ;;
+        test) echo 8201 ;;
     esac
 }
 
 get_postgres_port() {
     case "$1" in
-        dev) echo 5432 ;;
         prod) echo 5432 ;;
+        staging) echo 5532 ;;
+        test) echo 5632 ;;
     esac
 }
 
@@ -79,39 +85,24 @@ log_error() {
 
 validate_environment() {
     case "$ENVIRONMENT" in
-        dev|prod)
+        prod|staging|test)
             log_info "Target environment: $ENVIRONMENT"
             ;;
         *)
             log_error "Invalid environment: $ENVIRONMENT"
-            echo "Valid options: dev, prod"
+            echo "Valid options: prod, staging, test"
             exit 1
             ;;
     esac
 }
 
-get_compose_file() {
-    case "$ENVIRONMENT" in
-        dev)
-            echo "$DEPLOYMENT_DIR/docker-compose.local.yml"
-            ;;
-        prod)
-            echo "$DEPLOYMENT_DIR/docker-compose.yml"
-            ;;
-    esac
-}
-
 get_env_file() {
-    local env_file="$DEPLOYMENT_DIR/.env.$ENVIRONMENT"
-    if [[ -f "$env_file" ]]; then
-        echo "$env_file"
-    else
-        echo ""
-    fi
+    echo "$DEPLOYMENT_DIR/.env.$ENVIRONMENT"
 }
 
 start_services() {
-    local compose_file=$(get_compose_file)
+    local compose_file="$DEPLOYMENT_DIR/docker-compose.yml"
+    local base_env="$DEPLOYMENT_DIR/.env"
     local env_file=$(get_env_file)
     local project_name="mcp-memory-$ENVIRONMENT"
 
@@ -120,23 +111,27 @@ start_services() {
         exit 2
     fi
 
+    if [[ ! -f "$base_env" ]]; then
+        log_error "Base env file not found: $base_env (contains OPENAI_API_KEY)"
+        exit 2
+    fi
+
+    if [[ ! -f "$env_file" ]]; then
+        log_error "Environment file not found: $env_file"
+        exit 2
+    fi
+
     log_info "Starting services..."
     log_info "  Compose file: $compose_file"
+    log_info "  Base env: $base_env"
+    log_info "  Env file: $env_file"
     log_info "  Project name: $project_name"
 
     cd "$DEPLOYMENT_DIR"
 
-    # Build command array to handle paths with spaces
-    local -a cmd=(docker compose -f "$compose_file" -p "$project_name")
-
-    if [[ -n "$env_file" ]]; then
-        log_info "  Env file: $env_file"
-        cmd+=(--env-file "$env_file")
-    fi
-
-    cmd+=(up -d)
-
-    if ! "${cmd[@]}"; then
+    # Load both .env (secrets) and .env.{environment} (config)
+    # The second --env-file overrides values from the first
+    if ! docker compose -f "$compose_file" --env-file "$base_env" --env-file "$env_file" -p "$project_name" up -d; then
         log_error "Failed to start Docker Compose services"
         exit 2
     fi
@@ -159,7 +154,7 @@ check_health() {
         return 1
     fi
 
-    # Check Postgres
+    # Check Postgres (optional, may not have pg_isready)
     if command -v pg_isready &> /dev/null; then
         if ! pg_isready -h localhost -p "$postgres_port" -U events > /dev/null 2>&1; then
             return 1
@@ -200,7 +195,8 @@ print_status() {
     echo "=============================================="
     echo "Environment: $ENVIRONMENT"
     echo "=============================================="
-    echo "MCP Server:  http://localhost:$mcp_port"
+    echo "MCP Server:  http://localhost:$mcp_port/mcp/"
+    echo "Health:      http://localhost:$mcp_port/health"
     echo "ChromaDB:    http://localhost:$chroma_port"
     echo "PostgreSQL:  localhost:$postgres_port"
     echo "=============================================="

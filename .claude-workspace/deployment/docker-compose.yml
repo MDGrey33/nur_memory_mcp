@@ -22,7 +22,7 @@ services:
   # ===========================================================================
   chroma:
     image: chromadb/chroma:0.5.23
-    container_name: mcp-chroma
+    # container_name set by project: mcp-memory-{env}-chroma-1
     ports:
       - "${CHROMA_EXTERNAL_PORT:-8001}:8000"  # External:Internal
     volumes:
@@ -53,7 +53,7 @@ services:
   # ===========================================================================
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: mcp-postgres
+    # container_name set by project: mcp-memory-{env}-postgres-1
     ports:
       - "${POSTGRES_EXTERNAL_PORT:-5432}:5432"
     environment:
@@ -90,7 +90,7 @@ services:
       context: ../implementation/mcp-server
       dockerfile: Dockerfile
     image: mcp-memory-server:v5
-    container_name: mcp-server
+    # container_name set by project: mcp-memory-{env}-mcp-server-1
     ports:
       - "${MCP_PORT:-3001}:3000"
     environment:
@@ -167,7 +167,7 @@ services:
       context: ../implementation/mcp-server
       dockerfile: Dockerfile
     image: mcp-memory-server:v5
-    container_name: mcp-event-worker
+    # container_name set by project: mcp-memory-{env}-event-worker-1
     command: python -m src.worker
     environment:
       # OpenAI Configuration
