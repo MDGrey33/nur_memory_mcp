@@ -1,13 +1,19 @@
-# MCP Memory Server v4.0
+# MCP Memory Server v7.0
 
-A Model Context Protocol (MCP) server for persistent memory and context management with **semantic event extraction** and **graph-backed context expansion (V4)**. Provides semantic search, artifact storage, and event + entity context packs.
+A Model Context Protocol (MCP) server for persistent memory and context management with **semantic event extraction**, **graph-backed context expansion**, and **quality benchmarks**. Provides semantic search, artifact storage, and event + entity context packs.
 
-## What's New in V4
+## What's New in V7
 
-- **Graph-backed context expansion** - `hybrid_search(graph_expand=true)` can return `related_context[]` and `entities[]` using a 1-hop graph traversal (Apache AGE in Postgres)
-- **Static capability metadata** - `hybrid_search` always returns `expand_options[]` so clients can drive better UX / follow-up prompting
-- **Quality-tuned defaults** - `graph_expand=true`, `graph_seed_limit=1`, `graph_filters=["Decision","Commitment","QualityRisk"]` (opt out via `null`)
-- **Noise reduction** - default vector distance cutoff filters low-quality hits from `primary_results`
+- **Quality Benchmark Suite** - Comprehensive benchmarks for event extraction, entity resolution, recall relevance, and graph expansion with replay mode for CI/CD
+- **Outcome Evaluation** - Simple LLM-based outcome test for quick quality verification (~$0.006/run)
+- **Simplified API (V5/V6)** - `remember()`, `recall()`, `forget()`, `status()` - four intuitive tools replacing 17
+
+## Previous Releases
+
+### V4: Graph Expansion
+- **Graph-backed context expansion** - `recall(expand=true)` returns `related_context[]` and `entities[]` using graph traversal (Apache AGE in Postgres)
+- **Quality-tuned defaults** - `graph_expand=true`, `graph_seed_limit=1`, smart category filters
+- **Noise reduction** - Default vector distance cutoff filters low-quality hits
 
 ## Features
 
@@ -18,34 +24,50 @@ A Model Context Protocol (MCP) server for persistent memory and context manageme
 - **History Tracking** - Append-only conversation history per session
 - **Event Extraction** - Extract structured events (commitments, decisions, risks) from artifacts
 
-## Tools Available (17 total)
+## Tools Available
 
-### Memory Tools
+### V5+ Simplified API (Recommended)
+
+| Tool | Description |
+|------|-------------|
+| `remember` | Store content with automatic chunking, embedding, and event extraction |
+| `recall` | Semantic search with optional graph expansion and entity enrichment |
+| `forget` | Delete stored content with cascade confirmation |
+| `status` | Check system health and extraction job status |
+
+### Legacy Tools (V1-V4)
+
+<details>
+<summary>Click to expand legacy tools (17 total)</summary>
+
+#### Memory Tools
 - `memory_store` - Store a memory with type and confidence
 - `memory_search` - Semantic search over memories
 - `memory_list` - List all stored memories
 - `memory_delete` - Delete a specific memory
 
-### History Tools
+#### History Tools
 - `history_append` - Add entry to session history
 - `history_get` - Retrieve session history
 
-### Artifact Tools
+#### Artifact Tools
 - `artifact_ingest` - Ingest and chunk large documents
 - `artifact_search` - Search within artifacts
 - `artifact_get` - Retrieve artifact by ID
 - `artifact_delete` - Delete an artifact
 
-### Search Tools
+#### Search Tools
 - `hybrid_search` - Cross-collection search (artifacts + events) with source metadata
 - `embedding_health` - Check OpenAI embedding service status
 
-### V3 Event Tools
+#### Event Tools
 - `event_search` - Query events with filters (category, time, artifact)
 - `event_get` - Get single event by ID with evidence
 - `event_list` - List all events for an artifact
 - `event_reextract` - Force re-extraction of events
 - `job_status` - Check extraction job status
+
+</details>
 
 ## Quick Start
 
@@ -193,6 +215,42 @@ python test_samples.py all
 ```bash
 curl http://localhost:3001/health
 ```
+
+## Quality Benchmarks (V7)
+
+V7 includes a comprehensive benchmark suite for measuring extraction and retrieval quality.
+
+### Quick Quality Check
+
+```bash
+cd .claude-workspace/benchmarks
+export $(grep OPENAI_API_KEY ../deployment/.env)
+python outcome_eval.py
+```
+
+This stores test documents, queries for connections, and uses GPT-4o-mini to verify expected outcomes. Cost: ~$0.006/run.
+
+### Full Benchmark Suite
+
+```bash
+# Replay mode (uses fixtures, no API calls - for CI/CD)
+python tests/benchmark_runner.py --mode=replay
+
+# Live mode (requires running services)
+python tests/benchmark_runner.py --mode=live
+```
+
+### Metrics
+
+| Metric | Description | Target |
+|--------|-------------|--------|
+| Retrieval MRR | First relevant result ranking | 0.60 |
+| Retrieval NDCG | Overall ranking quality | 0.65 |
+| Event F1 | Event extraction accuracy | 0.70 |
+| Entity F1 | Entity extraction accuracy | 0.70 |
+| Graph F1 | Graph expansion accuracy | 0.60 |
+
+See [benchmarks/README.md](.claude-workspace/benchmarks/README.md) for details.
 
 ## Graph Visualization (V4: Apache AGE → Neo4j Browser)
 
