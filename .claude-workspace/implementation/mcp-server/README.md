@@ -1,18 +1,18 @@
-# MCP Memory Server v6.2 (HTTP Transport)
+# MCP Memory Server v7.0 (HTTP Transport)
 
 A persistent memory system for Claude using HTTP-based MCP transport with **semantic event extraction** and **graph-backed context expansion**.
 
-**Version**: 6.2.0 | **Status**: Production Ready
+**Version**: 7.0.0 | **Status**: Production Ready
 
 ## Port Configuration
 
-| Environment | Compose File | Default Port |
-|-------------|--------------|--------------|
-| Default/Prod | `docker-compose.yml` | 3000 |
-| Local Dev | `docker-compose.local.yml` | 3001 |
-| Test | `docker-compose.test.yml` | 3201 |
+| Environment | MCP Port | ChromaDB | PostgreSQL |
+|-------------|----------|----------|------------|
+| prod | 3001 | 8001 | 5432 |
+| staging | 3101 | 8101 | 5532 |
+| test | 3201 | 8201 | 5632 |
 
-*Source of truth: `.claude-workspace/deployment/` compose files*
+*Source of truth: `.claude-workspace/deployment/.env.{prod|staging|test}`*
 
 ## Quick Start
 
@@ -20,7 +20,8 @@ A persistent memory system for Claude using HTTP-based MCP transport with **sema
 
 ```bash
 cd .claude-workspace/deployment
-docker compose up -d
+echo "OPENAI_API_KEY=sk-proj-your-key" > .env
+./scripts/env-up.sh prod
 ```
 
 Or manually:
@@ -131,7 +132,7 @@ Environment variables (see `.env.example`):
 ### Core
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MCP_PORT` | 3000 | MCP server port |
+| `MCP_PORT` | 3000 | Internal container port (external: 3001/3101/3201) |
 | `LOG_LEVEL` | INFO | Logging verbosity |
 | `OPENAI_API_KEY` | (required) | OpenAI API key for embeddings |
 

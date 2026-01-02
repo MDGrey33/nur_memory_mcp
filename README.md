@@ -80,10 +80,10 @@ A Model Context Protocol (MCP) server for persistent memory and context manageme
 ### Start the Server
 
 ```bash
-# Start services with Docker Compose (V4)
-cd .claude-workspace/deployment/v4/docker
-cp ../env.v4.example .env
-docker compose -f docker-compose.v4.yml up -d
+# Start with scripts (recommended)
+cd .claude-workspace/deployment
+echo "OPENAI_API_KEY=sk-proj-your-key" > .env
+./scripts/env-up.sh prod
 
 # Or manually:
 cd .claude-workspace/implementation/mcp-server
@@ -95,6 +95,14 @@ python -m src.worker
 ```
 
 Server runs at: `http://localhost:3001/mcp/`
+
+### Environment Ports
+
+| Environment | MCP | ChromaDB | PostgreSQL |
+|-------------|-----|----------|------------|
+| prod | 3001 | 8001 | 5432 |
+| staging | 3101 | 8101 | 5532 |
+| test | 3201 | 8201 | 5632 |
 
 ### HTTPS Access (via ngrok)
 
@@ -482,7 +490,7 @@ docker rm -f neo4j-local
 ### Core
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MCP_PORT` | 3000 | Internal server port (Docker maps to 3001 externally) |
+| `MCP_PORT` | 3000 | Internal container port (external: prod=3001, staging=3101, test=3201) |
 | `OPENAI_API_KEY` | (required) | OpenAI API key |
 | `LOG_LEVEL` | INFO | Logging level |
 

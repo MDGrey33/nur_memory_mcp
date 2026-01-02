@@ -1,86 +1,80 @@
-# MCP Memory V1 - Quick Start Card
+# MCP Memory Server - Quick Start
 
-## 30-Second Start (Development)
+## 30-Second Start
 
 ```bash
 cd .claude-workspace/deployment
-make dev
+
+# 1. Create secrets file
+echo "OPENAI_API_KEY=sk-proj-your-key-here" > .env
+
+# 2. Start production
+./scripts/env-up.sh prod
+
+# 3. Verify
+./scripts/health-check.sh prod
 ```
 
-That's it! Services are running.
+## Configure Claude Code
 
-## Verify Everything Works
+Add to `.mcp.json` in your project root:
 
-```bash
-make health
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "type": "http",
+      "url": "http://localhost:3001/mcp/"
+    }
+  }
+}
 ```
+
+## Test It
+
+Ask Claude:
+> "Remember that I prefer Python over JavaScript"
+
+Then later:
+> "What do you recall about my preferences?"
 
 ## Common Commands
 
 ```bash
-make logs          # View logs
-make backup        # Backup data
-make restore       # Restore data
-make stop          # Stop services
+# Start/Stop
+./scripts/env-up.sh prod
+./scripts/env-down.sh prod
+
+# Health check
+./scripts/health-check.sh prod
+
+# View logs
+docker logs mcp-memory-prod-mcp-server-1 -f
 ```
 
-## Production Deployment
+## Environments
 
-```bash
-# 1. Configure
-cp .env.production.example .env.production
-nano .env.production
-
-# 2. Start
-make prod
-
-# 3. Verify
-make health
-
-# 4. Automated backups
-crontab -e
-# Add: 0 2 * * * cd /opt/mcp-memory/deployment && make backup
-```
+| Environment | MCP URL | Use Case |
+|-------------|---------|----------|
+| prod | http://localhost:3001/mcp/ | Daily use |
+| staging | http://localhost:3101/mcp/ | Pre-release |
+| test | http://localhost:3201/mcp/ | Testing |
 
 ## Troubleshooting
 
+**Tools not appearing?**
+1. Check URL has trailing slash
+2. Verify `"type": "http"` in config
+3. Run `claude /doctor`
+4. Restart Claude
+
+**Connection refused?**
 ```bash
-# Services won't start?
-make logs
-
-# Check configuration
-docker-compose -f docker-compose.prod.yml config
-
-# Clean everything
-make clean
+./scripts/health-check.sh prod
 ```
-
-## Access Services (Development)
-
-- **ChromaDB:** http://localhost:8000
-- **Health:** http://localhost:8000/api/v1/heartbeat
-
-## Production Notes
-
-- No ports exposed (internal only)
-- Access via: `docker exec chroma-prod curl http://localhost:8000/api/v1/heartbeat`
 
 ## Full Documentation
 
-- **Quick Ref:** [README.md](README.md)
-- **Complete Guide:** [deployment-guide.md](deployment-guide.md)
-- **Summary:** [DEPLOYMENT-SUMMARY.md](DEPLOYMENT-SUMMARY.md)
-
-## Help
-
-```bash
-make help
-```
-
----
-
-**TIP:** Run `make health` regularly to ensure services are healthy.
-
-**TIP:** Setup automated backups on day one: `make backup` + cron
-
-**TIP:** Review [deployment-guide.md](deployment-guide.md) before production deployment.
+- [CHEATSHEET.md](CHEATSHEET.md) - Quick reference
+- [README.md](README.md) - Deployment guide
+- [ENVIRONMENTS.md](ENVIRONMENTS.md) - Environment details
