@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Critical Rules
+
+1. **NEVER commit or push without explicit user permission** - Always ask before running `git commit` or `git push`
+2. **Be careful with destructive operations** - Ask before deleting untracked files, production data, or user configs. Git-tracked files can be modified freely (they're recoverable).
+3. **NEVER expose secrets** - Never log, commit, or display API keys, passwords, or tokens
+
 ## Project Overview
 
 MCP Memory Server v7 - A Model Context Protocol server for persistent memory with semantic event extraction, graph-backed context expansion, and quality benchmarks. Built with Python, FastMCP, ChromaDB, and PostgreSQL with Apache AGE.
