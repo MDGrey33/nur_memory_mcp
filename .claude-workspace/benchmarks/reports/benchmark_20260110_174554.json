@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-01-01T14:08:11.303578",
-  "mode": "replay",
+  "timestamp": "2026-01-10T17:45:54.681387",
+  "mode": "live",
   "strict": true,
   "extraction": {
     "per_document": [
@@ -15,38 +15,38 @@
       },
       {
         "doc_id": "meetings/meeting_002.txt",
-        "precision": 0.8571428571428571,
-        "recall": 0.6666666666666666,
-        "f1": 0.75,
-        "tp": 6,
-        "fp": 1,
-        "fn": 3
-      },
-      {
-        "doc_id": "meetings/meeting_003.txt",
-        "precision": 0.3333333333333333,
-        "recall": 0.4,
-        "f1": 0.3636363636363636,
-        "tp": 2,
-        "fp": 4,
-        "fn": 3
-      },
-      {
-        "doc_id": "meetings/meeting_004.txt",
-        "precision": 0.4,
-        "recall": 0.3333333333333333,
-        "f1": 0.3636363636363636,
-        "tp": 2,
-        "fp": 3,
+        "precision": 0.7142857142857143,
+        "recall": 0.5555555555555556,
+        "f1": 0.6250000000000001,
+        "tp": 5,
+        "fp": 2,
         "fn": 4
       },
       {
+        "doc_id": "meetings/meeting_003.txt",
+        "precision": 0.2,
+        "recall": 0.2,
+        "f1": 0.20000000000000004,
+        "tp": 1,
+        "fp": 4,
+        "fn": 4
+      },
+      {
+        "doc_id": "meetings/meeting_004.txt",
+        "precision": 0.3,
+        "recall": 0.5,
+        "f1": 0.37499999999999994,
+        "tp": 3,
+        "fp": 7,
+        "fn": 3
+      },
+      {
         "doc_id": "meetings/meeting_005.txt",
-        "precision": 0.6666666666666666,
+        "precision": 0.8,
         "recall": 0.3333333333333333,
-        "f1": 0.4444444444444444,
+        "f1": 0.47058823529411764,
         "tp": 4,
-        "fp": 2,
+        "fp": 1,
         "fn": 8
       },
       {
@@ -55,7 +55,7 @@
         "recall": 0.0,
         "f1": 0.0,
         "tp": 0,
-        "fp": 0,
+        "fp": 6,
         "fn": 2
       },
       {
@@ -64,7 +64,7 @@
         "recall": 0.0,
         "f1": 0.0,
         "tp": 0,
-        "fp": 6,
+        "fp": 5,
         "fn": 4
       },
       {
@@ -78,11 +78,11 @@
       },
       {
         "doc_id": "decisions/decision_001.txt",
-        "precision": 0.25,
+        "precision": 0.2,
         "recall": 0.3333333333333333,
-        "f1": 0.28571428571428575,
+        "f1": 0.25,
         "tp": 1,
-        "fp": 3,
+        "fp": 4,
         "fn": 2
       },
       {
@@ -96,31 +96,31 @@
       },
       {
         "doc_id": "conversations/conversation_001.txt",
-        "precision": 0.375,
-        "recall": 0.6,
-        "f1": 0.4615384615384615,
-        "tp": 3,
+        "precision": 0.2857142857142857,
+        "recall": 0.4,
+        "f1": 0.3333333333333333,
+        "tp": 2,
         "fp": 5,
-        "fn": 2
+        "fn": 3
       },
       {
         "doc_id": "conversations/conversation_002.txt",
-        "precision": 0.4,
-        "recall": 0.3333333333333333,
-        "f1": 0.3636363636363636,
-        "tp": 2,
-        "fp": 3,
-        "fn": 4
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "tp": 0,
+        "fp": 6,
+        "fn": 6
       }
     ],
     "aggregated": {
-      "precision": 0.4126984126984127,
-      "recall": 0.4126984126984127,
-      "f1": 0.4126984126984127,
-      "macro_f1": 0.35642089392089393,
-      "total_tp": 26,
-      "total_fp": 37,
-      "total_fn": 37,
+      "precision": 0.3055555555555556,
+      "recall": 0.3492063492063492,
+      "f1": 0.32592592592592595,
+      "macro_f1": 0.2915305010893246,
+      "total_tp": 22,
+      "total_fp": 50,
+      "total_fn": 41,
       "num_documents": 12
     },
     "pass": false,
@@ -130,121 +130,121 @@
     "per_document": [
       {
         "doc_id": "meetings/meeting_001.txt",
-        "precision": 0.0,
-        "recall": 0.0,
-        "f1": 0.0,
-        "tp": 0,
-        "fp": 0,
-        "fn": 3
+        "precision": 0.375,
+        "recall": 1.0,
+        "f1": 0.5454545454545454,
+        "tp": 3,
+        "fp": 5,
+        "fn": 0
       },
       {
         "doc_id": "meetings/meeting_002.txt",
-        "precision": 0.0,
-        "recall": 0.0,
-        "f1": 0.0,
-        "tp": 0,
-        "fp": 0,
-        "fn": 5
+        "precision": 0.625,
+        "recall": 1.0,
+        "f1": 0.7692307692307693,
+        "tp": 5,
+        "fp": 3,
+        "fn": 0
       },
       {
         "doc_id": "meetings/meeting_003.txt",
-        "precision": 0.0,
-        "recall": 0.0,
-        "f1": 0.0,
-        "tp": 0,
-        "fp": 0,
-        "fn": 4
+        "precision": 0.5714285714285714,
+        "recall": 1.0,
+        "f1": 0.7272727272727273,
+        "tp": 4,
+        "fp": 3,
+        "fn": 0
       },
       {
         "doc_id": "meetings/meeting_004.txt",
-        "precision": 0.0,
-        "recall": 0.0,
-        "f1": 0.0,
-        "tp": 0,
-        "fp": 0,
-        "fn": 7
+        "precision": 0.4375,
+        "recall": 1.0,
+        "f1": 0.6086956521739131,
+        "tp": 7,
+        "fp": 9,
+        "fn": 0
       },
       {
         "doc_id": "meetings/meeting_005.txt",
-        "precision": 1.0,
+        "precision": 0.4444444444444444,
         "recall": 0.5,
-        "f1": 0.6666666666666666,
+        "f1": 0.47058823529411764,
         "tp": 4,
-        "fp": 0,
+        "fp": 5,
         "fn": 4
       },
       {
         "doc_id": "emails/email_001.txt",
-        "precision": 0.0,
-        "recall": 0.0,
-        "f1": 0.0,
-        "tp": 0,
-        "fp": 0,
-        "fn": 6
+        "precision": 0.5,
+        "recall": 0.8333333333333334,
+        "f1": 0.625,
+        "tp": 5,
+        "fp": 5,
+        "fn": 1
       },
       {
         "doc_id": "emails/email_002.txt",
-        "precision": 0.0,
-        "recall": 0.0,
-        "f1": 0.0,
-        "tp": 0,
-        "fp": 0,
-        "fn": 4
+        "precision": 0.2857142857142857,
+        "recall": 0.5,
+        "f1": 0.36363636363636365,
+        "tp": 2,
+        "fp": 5,
+        "fn": 2
       },
       {
         "doc_id": "emails/email_003.txt",
-        "precision": 1.0,
-        "recall": 0.2,
-        "f1": 0.33333333333333337,
-        "tp": 1,
-        "fp": 0,
-        "fn": 4
+        "precision": 0.5,
+        "recall": 1.0,
+        "f1": 0.6666666666666666,
+        "tp": 5,
+        "fp": 5,
+        "fn": 0
       },
       {
         "doc_id": "decisions/decision_001.txt",
-        "precision": 0.0,
-        "recall": 0.0,
-        "f1": 0.0,
-        "tp": 0,
-        "fp": 0,
-        "fn": 4
+        "precision": 0.375,
+        "recall": 0.75,
+        "f1": 0.5,
+        "tp": 3,
+        "fp": 5,
+        "fn": 1
       },
       {
         "doc_id": "decisions/decision_002.txt",
-        "precision": 0.0,
-        "recall": 0.0,
-        "f1": 0.0,
-        "tp": 0,
-        "fp": 1,
-        "fn": 3
+        "precision": 0.2857142857142857,
+        "recall": 0.6666666666666666,
+        "f1": 0.4,
+        "tp": 2,
+        "fp": 5,
+        "fn": 1
       },
       {
         "doc_id": "conversations/conversation_001.txt",
-        "precision": 0.0,
-        "recall": 0.0,
-        "f1": 0.0,
-        "tp": 0,
-        "fp": 0,
-        "fn": 6
+        "precision": 0.45454545454545453,
+        "recall": 0.8333333333333334,
+        "f1": 0.5882352941176471,
+        "tp": 5,
+        "fp": 6,
+        "fn": 1
       },
       {
         "doc_id": "conversations/conversation_002.txt",
-        "precision": 0.0,
-        "recall": 0.0,
-        "f1": 0.0,
-        "tp": 0,
-        "fp": 1,
-        "fn": 6
+        "precision": 0.4166666666666667,
+        "recall": 0.8333333333333334,
+        "f1": 0.5555555555555556,
+        "tp": 5,
+        "fp": 7,
+        "fn": 1
       }
     ],
     "aggregated": {
-      "precision": 0.7142857142857143,
-      "recall": 0.08196721311475409,
-      "f1": 0.14705882352941174,
-      "macro_f1": 0.08333333333333333,
-      "total_tp": 5,
-      "total_fp": 2,
-      "total_fn": 56,
+      "precision": 0.4424778761061947,
+      "recall": 0.819672131147541,
+      "f1": 0.574712643678161,
+      "macro_f1": 0.5683613174501921,
+      "total_tp": 50,
+      "total_fp": 63,
+      "total_fn": 11,
       "num_documents": 12
     },
     "pass": false,
@@ -409,57 +409,57 @@
     "per_query": [
       {
         "query_id": "gq_001",
-        "connection_precision": 0.0,
-        "connection_recall": 0.0,
-        "connection_f1": 0.0,
-        "doc_precision": 0.3181818181818182,
+        "connection_precision": 0.5,
+        "connection_recall": 0.8333333333333334,
+        "connection_f1": 0.625,
+        "doc_precision": 0.2413793103448276,
         "doc_recall": 0.7777777777777778,
-        "doc_f1": 0.45161290322580644
+        "doc_f1": 0.368421052631579
       },
       {
         "query_id": "gq_002",
-        "connection_precision": 0.0,
-        "connection_recall": 0.0,
-        "connection_f1": 0.0,
-        "doc_precision": 0.2692307692307692,
+        "connection_precision": 0.5,
+        "connection_recall": 1.0,
+        "connection_f1": 0.6666666666666666,
+        "doc_precision": 0.23333333333333334,
         "doc_recall": 1.0,
-        "doc_f1": 0.42424242424242425
+        "doc_f1": 0.37837837837837834
       },
       {
         "query_id": "gq_003",
-        "connection_precision": 0.0,
-        "connection_recall": 0.0,
-        "connection_f1": 0.0,
-        "doc_precision": 0.12903225806451613,
+        "connection_precision": 0.375,
+        "connection_recall": 1.0,
+        "connection_f1": 0.5454545454545454,
+        "doc_precision": 0.13793103448275862,
         "doc_recall": 1.0,
-        "doc_f1": 0.2285714285714286
+        "doc_f1": 0.2424242424242424
       },
       {
         "query_id": "gq_004",
         "connection_precision": 0.0,
         "connection_recall": 1.0,
         "connection_f1": 0.0,
-        "doc_precision": 0.09375,
+        "doc_precision": 0.1,
         "doc_recall": 1.0,
-        "doc_f1": 0.17142857142857143
+        "doc_f1": 0.18181818181818182
       },
       {
         "query_id": "gq_005",
-        "connection_precision": 0.0,
-        "connection_recall": 0.0,
-        "connection_f1": 0.0,
-        "doc_precision": 0.14285714285714285,
+        "connection_precision": 0.5555555555555556,
+        "connection_recall": 1.0,
+        "connection_f1": 0.7142857142857143,
+        "doc_precision": 0.08695652173913043,
         "doc_recall": 1.0,
-        "doc_f1": 0.25
+        "doc_f1": 0.16
       }
     ],
     "aggregated": {
-      "connection_precision": 0.0,
-      "connection_recall": 0.2,
-      "connection_f1": 0.0,
-      "doc_precision": 0.19061039766684926,
+      "connection_precision": 0.3861111111111111,
+      "connection_recall": 0.9666666666666666,
+      "connection_f1": 0.5102813852813852,
+      "doc_precision": 0.15992003998000998,
       "doc_recall": 0.9555555555555555,
-      "doc_f1": 0.30517106549364614,
+      "doc_f1": 0.2662083710504763,
       "num_queries": 5
     },
     "pass": false,

@@ -640,6 +640,8 @@ async def recall(
                 include_entities=include_entities,
                 context_filter=context,
                 min_importance=min_importance,
+                date_from=date_from,
+                date_to=date_to,
             )
 
             v4_dict = v5_result.to_dict()

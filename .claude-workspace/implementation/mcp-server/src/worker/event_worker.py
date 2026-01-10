@@ -281,12 +281,13 @@ class EventWorker:
         chunk_texts: List[Tuple],
         doc_title: str
     ) -> None:
-        """V4 extraction: events + entities with resolution."""
+        """V8 extraction: events + entities + relationships with resolution."""
         chunk_events = []
         chunk_entities = []
+        chunk_relationships = []
 
         for chunk_text, chunk_index, chunk_id, start_char in chunk_texts:
-            events, entities = self.extraction_service.extract_from_chunk_v4(
+            events, entities, relationships = self.extraction_service.extract_from_chunk_v4(
                 chunk_text=chunk_text,
                 chunk_index=chunk_index,
                 chunk_id=chunk_id,
@@ -294,6 +295,7 @@ class EventWorker:
             )
             chunk_events.append(events)
             chunk_entities.append(entities)
+            chunk_relationships.append(relationships)
 
         # Canonicalize events across chunks (Prompt B)
         canonical_events = self.extraction_service.canonicalize_events(chunk_events)
@@ -307,7 +309,10 @@ class EventWorker:
         # Deduplicate entities across chunks
         deduped_entities = self.extraction_service.deduplicate_entities(chunk_entities)
 
-        logger.info(f"Extracted {len(valid_events)} events, {len(deduped_entities)} entities (V4)")
+        # V8: Deduplicate relationships across chunks
+        deduped_relationships = self.extraction_service.deduplicate_relationships(chunk_relationships)
+
+        logger.info(f"Extracted {len(valid_events)} events, {len(deduped_entities)} entities, {len(deduped_relationships)} relationships (V8)")
 
         # Resolve entities to canonical IDs
         # Map multiple surface forms/aliases to resolved entity IDs so we can reliably
@@ -375,6 +380,48 @@ class EventWorker:
             entity_event_map=entity_event_map,
             enqueue_graph_upsert=False  # V6: AGE graph removed
         )
+
+        # V8: Store explicit edges between entities
+        edges_stored = 0
+        for rel in deduped_relationships:
+            source_name = rel.get("source_entity", "").lower()
+            target_name = rel.get("target_entity", "").lower()
+
+            # Lookup entity IDs
+            source_id = entity_map.get(source_name)
+            target_id = entity_map.get(target_name)
+
+            if source_id and target_id and source_id != target_id:
+                try:
+                    await self.pg_client.execute(
+                        """
+                        INSERT INTO entity_edge (
+                            source_entity_id, target_entity_id, relationship_type,
+                            artifact_uid, revision_id, confidence, evidence_quote
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        ON CONFLICT (source_entity_id, target_entity_id, relationship_type, artifact_uid)
+                        DO UPDATE SET
+                            confidence = GREATEST(entity_edge.confidence, EXCLUDED.confidence),
+                            evidence_quote = COALESCE(EXCLUDED.evidence_quote, entity_edge.evidence_quote)
+                        """,
+                        source_id,
+                        target_id,
+                        rel.get("relationship_type", "RELATES_TO"),
+                        artifact_uid,
+                        revision_id,
+                        rel.get("confidence", 0.8),
+                        rel.get("evidence_quote")
+                    )
+                    edges_stored += 1
+                except Exception as e:
+                    logger.warning(f"Failed to store edge {source_name} -> {target_name}: {e}")
+            else:
+                if not source_id:
+                    logger.debug(f"Edge source entity not found: {source_name}")
+                if not target_id:
+                    logger.debug(f"Edge target entity not found: {target_name}")
+
+        logger.info(f"Stored {edges_stored} explicit edges (V8)")
 
     async def _mark_job_failed(self, job_id: UUID, error: Exception) -> None:
         """Mark a job as failed with appropriate retry logic."""

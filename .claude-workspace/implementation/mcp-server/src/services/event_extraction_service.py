@@ -49,6 +49,20 @@ ENTITY_TYPES = [
     "other"
 ]
 
+# V8: Relationship types for explicit edges
+RELATIONSHIP_TYPES = [
+    # Interpersonal
+    "MANAGES", "REPORTS_TO", "WORKS_WITH", "COLLABORATES_WITH",
+    # Ownership/Assignment
+    "OWNS", "ASSIGNED_TO", "RESPONSIBLE_FOR", "CONTRIBUTED_TO", "COMMITTED_TO",
+    # Decisions
+    "DECIDED", "APPROVED", "REJECTED", "DEFERRED",
+    # Causality
+    "CAUSED", "ENABLED", "BLOCKED", "TRIGGERED", "RESOLVED",
+    # Reference
+    "MENTIONED", "DISCUSSED", "RELATES_TO"
+]
+
 
 # Prompt A: Extract events AND entities from a single chunk (V4 extended, V7.3 dynamic categories)
 PROMPT_A_SYSTEM = """You are an expert at extracting structured semantic events and entities from text artifacts.
@@ -110,6 +124,32 @@ For each entity, extract:
 - **start_char**: Starting character offset in this chunk
 - **end_char**: Ending character offset in this chunk
 
+## RELATIONSHIPS (V8)
+
+Also extract explicit relationships between entities:
+
+**Interpersonal**:
+- MANAGES, REPORTS_TO, WORKS_WITH, COLLABORATES_WITH
+
+**Ownership/Assignment**:
+- OWNS, ASSIGNED_TO, RESPONSIBLE_FOR, CONTRIBUTED_TO, COMMITTED_TO
+
+**Decisions**:
+- DECIDED, APPROVED, REJECTED, DEFERRED
+
+**Causality**:
+- CAUSED, ENABLED, BLOCKED, TRIGGERED, RESOLVED
+
+**Reference**:
+- MENTIONED, DISCUSSED, RELATES_TO
+
+For each relationship, extract:
+- **source_entity**: The entity performing or initiating (use canonical name)
+- **target_entity**: The entity receiving or affected (use canonical name)
+- **relationship_type**: One of the types above (uppercase)
+- **confidence**: 0.0-1.0
+- **evidence_quote**: Short quote from text supporting this relationship (max 50 words)
+
 Return JSON with this structure:
 {
   "events": [
@@ -143,6 +183,22 @@ Return JSON with this structure:
       "confidence": 0.95,
       "start_char": 150,
       "end_char": 160
+    }
+  ],
+  "relationships": [
+    {
+      "source_entity": "Alice Chen",
+      "target_entity": "Bob Smith",
+      "relationship_type": "MANAGES",
+      "confidence": 0.9,
+      "evidence_quote": "Alice oversees Bob's work on the API project"
+    },
+    {
+      "source_entity": "Bob Smith",
+      "target_entity": "API v2",
+      "relationship_type": "COMMITTED_TO",
+      "confidence": 0.85,
+      "evidence_quote": "Bob committed to finishing the API by Friday"
     }
   ]
 }
@@ -234,7 +290,7 @@ class EventExtractionService:
         Returns:
             List of extracted events
         """
-        events, _ = self.extract_from_chunk_v4(chunk_text, chunk_index, chunk_id, start_char)
+        events, _, _ = self.extract_from_chunk_v4(chunk_text, chunk_index, chunk_id, start_char)
         return events
 
     def extract_from_chunk_v4(
@@ -243,9 +299,9 @@ class EventExtractionService:
         chunk_index: int,
         chunk_id: str,
         start_char: int
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
         """
-        Extract events AND entities from a single chunk using Prompt A (V4 extended).
+        Extract events, entities, AND relationships from a single chunk (V8 extended).
 
         Args:
             chunk_text: Text content of the chunk
@@ -254,7 +310,7 @@ class EventExtractionService:
             start_char: Starting character offset in original artifact
 
         Returns:
-            Tuple of (events, entities_mentioned)
+            Tuple of (events, entities_mentioned, relationships)
         """
         user_prompt = PROMPT_A_USER_TEMPLATE.format(
             chunk_index=chunk_index,
@@ -280,6 +336,7 @@ class EventExtractionService:
 
             events = result.get("events", [])
             entities = result.get("entities_mentioned", [])
+            relationships = result.get("relationships", [])
 
             # Adjust character offsets to be relative to full artifact
             for event in events:
@@ -297,13 +354,17 @@ class EventExtractionService:
                     entity["end_char"] += start_char
                 entity["chunk_id"] = chunk_id
 
-            logger.info(f"Extracted {len(events)} events and {len(entities)} entities from chunk {chunk_index}")
-            return events, entities
+            # Add chunk_id to relationships for tracking
+            for rel in relationships:
+                rel["chunk_id"] = chunk_id
+
+            logger.info(f"Extracted {len(events)} events, {len(entities)} entities, {len(relationships)} relationships from chunk {chunk_index}")
+            return events, entities, relationships
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON from Prompt A: {e}")
             logger.error(f"Raw response: {content}")
-            return [], []
+            return [], [], []
         except Exception as e:
             logger.error(f"Error in extract_from_chunk_v4: {e}")
             raise
@@ -551,4 +612,94 @@ class EventExtractionService:
             result.append(entity)
 
         logger.info(f"Deduplicated entities: {sum(len(e) for e in chunk_entities)} -> {len(result)}")
+        return result
+
+    def validate_relationship(self, relationship: Dict[str, Any]) -> bool:
+        """
+        Validate extracted relationship structure (V8).
+
+        Args:
+            relationship: Relationship dict to validate
+
+        Returns:
+            True if valid, False otherwise
+        """
+        required_fields = ["source_entity", "target_entity", "relationship_type"]
+
+        for field in required_fields:
+            if field not in relationship:
+                logger.warning(f"Relationship missing required field: {field}")
+                return False
+
+        # Validate source and target are non-empty
+        if not relationship.get("source_entity") or not relationship.get("target_entity"):
+            logger.warning("Relationship has empty source or target entity")
+            return False
+
+        # Validate relationship type (normalize to uppercase)
+        rel_type = relationship.get("relationship_type", "").upper()
+        if rel_type not in RELATIONSHIP_TYPES:
+            # Accept but normalize unknown types
+            logger.debug(f"Unknown relationship type: {rel_type}, accepting anyway")
+        relationship["relationship_type"] = rel_type
+
+        # Validate confidence if present
+        if "confidence" in relationship:
+            try:
+                conf = float(relationship["confidence"])
+                if not (0.0 <= conf <= 1.0):
+                    relationship["confidence"] = 0.8
+            except (ValueError, TypeError):
+                relationship["confidence"] = 0.8
+        else:
+            relationship["confidence"] = 0.8
+
+        return True
+
+    def deduplicate_relationships(
+        self,
+        chunk_relationships: List[List[Dict[str, Any]]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Deduplicate relationships across chunks (V8).
+
+        Relationships are considered duplicates if they have the same
+        source, target, and relationship type.
+
+        Args:
+            chunk_relationships: List of relationship lists (one per chunk)
+
+        Returns:
+            Deduplicated list of relationships with highest confidence
+        """
+        # Build a map of (source, target, type) -> best relationship
+        rel_map: Dict[str, Dict[str, Any]] = {}
+
+        for relationships in chunk_relationships:
+            for rel in relationships:
+                if not self.validate_relationship(rel):
+                    continue
+
+                # Create key from normalized names + type
+                source = rel["source_entity"].lower().strip()
+                target = rel["target_entity"].lower().strip()
+                rel_type = rel["relationship_type"]
+                key = f"{source}:{target}:{rel_type}"
+
+                if key not in rel_map:
+                    rel_map[key] = rel
+                else:
+                    # Keep the one with higher confidence
+                    existing = rel_map[key]
+                    if rel.get("confidence", 0.8) > existing.get("confidence", 0.8):
+                        # Keep new one but preserve evidence from both
+                        if existing.get("evidence_quote") and rel.get("evidence_quote"):
+                            # Combine evidence if different
+                            if existing["evidence_quote"] != rel["evidence_quote"]:
+                                rel["evidence_quote"] = f"{rel['evidence_quote']} | {existing['evidence_quote']}"
+                        rel_map[key] = rel
+
+        result = list(rel_map.values())
+        total_input = sum(len(r) for r in chunk_relationships)
+        logger.info(f"Deduplicated relationships: {total_input} -> {len(result)}")
         return result

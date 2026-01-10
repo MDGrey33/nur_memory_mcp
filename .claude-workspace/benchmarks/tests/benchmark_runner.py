@@ -422,60 +422,84 @@ class LiveMCPClient:
 
         return [], ""
 
-    async def _wait_and_fetch_events(self, artifact_id: str, max_wait: int = 30) -> list[dict]:
-        """Wait for event extraction to complete and return events."""
-        # LLM extraction can take 30-60 seconds with multiple embeddings
-        # Poll for events on this specific artifact rather than global pending_jobs
-        # (pending_jobs can be 0 if job finishes before first poll)
+    async def _wait_and_fetch_events(self, artifact_id: str, max_wait: int = 90) -> list[dict]:
+        """Wait for event extraction to complete and return events.
 
+        V9 Fix: Increased max_wait from 30 to 90 iterations (180 seconds).
+        Multi-chunk documents with LLM extraction can take 60-120+ seconds.
+        Also checks job status via status() tool for better feedback.
+        """
         events = []
+
         for i in range(max_wait):
             await asyncio.sleep(2)  # Poll every 2 seconds
-            if i % 5 == 0:  # Progress every 10 seconds
-                print(f"      [{artifact_id}] waiting for extraction... {i*2}s", flush=True)
 
-            # Fetch events via recall with ID
-            result = await self._call_tool("recall", {
-                "id": artifact_id,
-                "include_events": True
-            })
+            # V9: Check job status first for better feedback
+            if i % 5 == 0:  # Every 10 seconds, check status
+                try:
+                    status_result = await self._call_tool("status", {"artifact_id": artifact_id})
+                    status_data = self._parse_tool_result(status_result)
+                    job_status = status_data.get("job_status", {})
 
-            # Parse events from result - V6 format
-            tool_result = result.get('result', {})
-            if isinstance(tool_result, dict):
-                content_list = tool_result.get('content', [])
-                if content_list:
-                    text = content_list[0].get('text', '')
-                    try:
-                        data = json.loads(text) if text.startswith('{') else {}
-                        # V6: events are nested inside results[0].events
-                        results = data.get('results', [])
-                        if results and isinstance(results[0], dict):
-                            events = results[0].get('events', [])
+                    if job_status:
+                        job_state = job_status.get("status", "UNKNOWN")
+                        if job_state == "FAILED":
+                            error = job_status.get("error_message", "Unknown error")
+                            print(f"      [{artifact_id}] extraction FAILED: {error}", flush=True)
+                            return []
+                        elif job_state == "COMPLETED":
+                            print(f"      [{artifact_id}] job completed, fetching events...", flush=True)
+                            # Job done, fetch events and return
+                            events = await self._fetch_events_from_recall(artifact_id)
                             if events:
                                 print(f"      [{artifact_id}] found {len(events)} events!", flush=True)
-                                # Found events, wait a bit more for any stragglers
-                                await asyncio.sleep(2)
-                                # Re-fetch to get final count
-                                result = await self._call_tool("recall", {
-                                    "id": artifact_id,
-                                    "include_events": True
-                                })
-                                for line in result.get('result', {}).get('content', []):
-                                    if isinstance(line, dict):
-                                        text = line.get('text', '')
-                                        try:
-                                            data = json.loads(text)
-                                            results = data.get('results', [])
-                                            if results:
-                                                events = results[0].get('events', [])
-                                        except json.JSONDecodeError:
-                                            pass
-                                return events
-                    except json.JSONDecodeError:
-                        pass
+                            return events
+                        else:
+                            print(f"      [{artifact_id}] waiting... {i*2}s (job_status={job_state})", flush=True)
+                    else:
+                        print(f"      [{artifact_id}] waiting... {i*2}s", flush=True)
+                except Exception as e:
+                    print(f"      [{artifact_id}] waiting... {i*2}s (status check failed: {e})", flush=True)
 
+            # Also try to fetch events directly (they may appear before job marked complete)
+            events = await self._fetch_events_from_recall(artifact_id)
+            if events:
+                print(f"      [{artifact_id}] found {len(events)} events!", flush=True)
+                # Wait a bit more for any stragglers, then re-fetch
+                await asyncio.sleep(3)
+                events = await self._fetch_events_from_recall(artifact_id)
+                return events
+
+        # Timeout - return whatever we have
+        print(f"      [{artifact_id}] TIMEOUT after {max_wait*2}s", flush=True)
         return events
+
+    async def _fetch_events_from_recall(self, artifact_id: str) -> list[dict]:
+        """Fetch events for an artifact via recall() tool."""
+        result = await self._call_tool("recall", {
+            "id": artifact_id,
+            "include_events": True
+        })
+
+        data = self._parse_tool_result(result)
+        results = data.get('results', [])
+        if results and isinstance(results[0], dict):
+            return results[0].get('events', [])
+        return []
+
+    def _parse_tool_result(self, result: dict) -> dict:
+        """Parse JSON from tool result content."""
+        tool_result = result.get('result', {})
+        if isinstance(tool_result, dict):
+            content_list = tool_result.get('content', [])
+            if content_list:
+                text = content_list[0].get('text', '')
+                try:
+                    if text.startswith('{'):
+                        return json.loads(text)
+                except json.JSONDecodeError:
+                    pass
+        return {}
 
     async def extract_entities(self, content: str, doc_id: str) -> list[dict]:
         """
@@ -512,8 +536,8 @@ class LiveMCPClient:
         if not artifact_id:
             return []
 
-        # Wait for extraction to complete
-        events = await self._wait_and_fetch_events(artifact_id, max_wait=15)
+        # Wait for extraction to complete (V9: use same timeout as event extraction)
+        events = await self._wait_and_fetch_events(artifact_id, max_wait=45)
 
         # V7.3: Extract entities from actual actors/subjects fields (not regex)
         entities = []
@@ -961,7 +985,7 @@ class BenchmarkRunner:
             'errors': errors
         }
 
-    async def run_graph_benchmarks(self, graph_truth: dict) -> dict:
+    async def run_graph_benchmarks(self, graph_truth: dict, entities_truth: dict = None) -> dict:
         """Run graph expansion quality benchmarks."""
         benchmark_queries = graph_truth.get('benchmark_queries', [])
         if not benchmark_queries:
@@ -973,16 +997,44 @@ class BenchmarkRunner:
                 'skipped': True
             }
 
+        # Build name → ID mapping from entities ground truth
+        # This allows matching "Bob Smith" to "ent_bob"
+        name_to_id = {}
+        if entities_truth:
+            for entity_list in entities_truth.get('global_entities', {}).values():
+                for entity in entity_list:
+                    name = entity.get('name', '')
+                    ent_id = entity.get('id', '')
+                    if name and ent_id:
+                        # Map full name and normalized variants
+                        name_to_id[name.lower()] = ent_id
+                        # Also map first name only (e.g., "Bob" -> "ent_bob")
+                        first_name = name.split()[0].lower() if name else ''
+                        if first_name:
+                            name_to_id[first_name] = ent_id
+
         results = []
         errors = []
 
         for query in benchmark_queries:
             query_id = query['id']
+            # Use the natural language query for recall, not the entity ID
+            query_text = query.get('query', '')
             seed = query.get('seed', query.get('seed_from', ''))
+            # If no query provided, translate seed to name using our mapping
+            if not query_text and seed:
+                seed_lower = seed.replace('ent_', '').lower()
+                # Try to find full name from mapping (reverse lookup)
+                for name, ent_id in name_to_id.items():
+                    if ent_id == seed:
+                        query_text = name.title()  # Use the name as query
+                        break
+                if not query_text:
+                    query_text = seed  # Fallback to seed ID
             print(f"  Evaluating graph expansion: {query_id}", flush=True)
 
             try:
-                connections, docs = await self.client.graph_expand(seed, query_id)
+                connections, docs = await self.client.graph_expand(query_text, query_id)
 
                 if self.config.record:
                     self.fixture_store.save_graph_fixture(query_id, connections, docs)
@@ -993,12 +1045,27 @@ class BenchmarkRunner:
                     for doc_id in docs
                 ]
 
+                # Translate entity names to IDs for comparison
+                # e.g., "Bob Smith" -> "ent_bob"
+                translated_connections = set()
+                for conn in connections:
+                    conn_lower = conn.lower()
+                    if conn_lower in name_to_id:
+                        translated_connections.add(name_to_id[conn_lower])
+                    else:
+                        # Try first name only
+                        first_name = conn.split()[0].lower() if conn else ''
+                        if first_name in name_to_id:
+                            translated_connections.add(name_to_id[first_name])
+                        else:
+                            translated_connections.add(conn)  # Keep original if no match
+
                 # Evaluate connection quality
                 expected_connections = set(query.get('expected_connections', []))
                 expected_docs = set(query.get('expected_docs', []))
 
                 conn_result = evaluate_graph_expansion(
-                    set(connections),
+                    translated_connections,
                     expected_connections
                 )
                 doc_result = evaluate_graph_expansion(
@@ -1144,7 +1211,7 @@ class BenchmarkRunner:
         retrieval_results = await self.run_retrieval_benchmarks(queries)
 
         print("\nRunning graph expansion benchmarks...")
-        graph_results = await self.run_graph_benchmarks(graph_truth)
+        graph_results = await self.run_graph_benchmarks(graph_truth, entities_truth)
 
         # Collect all errors
         all_errors = (

@@ -36,6 +36,36 @@ Create comprehensive automated tests ensuring code quality and reliability.
 - API workflow testing
 - Performance validation
 
+## Pre-flight Version Check
+
+Before running integration, E2E, or live benchmark tests, verify the deployed server matches local code:
+
+```bash
+cd .claude-workspace/deployment
+./scripts/version-check.sh test    # For test environment
+./scripts/version-check.sh staging # For staging environment
+```
+
+**What it does**:
+1. Reads `__version__` from `src/server.py`
+2. Fetches version from `/health` endpoint on target environment
+3. If versions mismatch:
+   - Rebuilds mcp-server and event-worker containers (`--no-cache`)
+   - Restarts the services
+   - Waits for healthy (up to 120s)
+
+**When to use**:
+
+| Test Type | Version Check Required |
+|-----------|----------------------|
+| Unit tests | No (uses mocks) |
+| Integration tests | Yes |
+| E2E tests | Yes |
+| Benchmarks (live) | Yes |
+| Benchmarks (replay) | No (uses fixtures) |
+
+**Skip version check**: Set `SKIP_VERSION_CHECK=1` or use `--skip` flag.
+
 ## Test Structure (AAA Pattern)
 
 ```javascript
@@ -64,21 +94,64 @@ describe('Feature', () => {
 
 ## Test Commands
 
-```bash
-# Run all tests
-npm test
+### Unit Tests (Python/pytest)
 
-# Run with coverage
-npm test -- --coverage
+```bash
+cd .claude-workspace/implementation/mcp-server
+
+# Run all unit tests
+pytest tests/unit/ -v
 
 # Run specific test file
-npm test -- path/to/test.spec.js
+pytest tests/unit/services/test_retrieval_service.py -v
 
-# Run in watch mode
-npm test -- --watch
+# Run with coverage
+pytest tests/unit/ --cov=src --cov-report=html
+```
 
-# Generate coverage report
-npm test -- --coverage --coverageReporters=html
+### Quality Benchmarks
+
+```bash
+# For live mode, first check version
+cd .claude-workspace/deployment
+./scripts/version-check.sh test
+
+# Then run benchmarks
+cd ../benchmarks
+
+# Full benchmark suite (live mode - requires running services)
+MCP_URL=http://localhost:3201 python tests/benchmark_runner.py --mode=live
+
+# Replay mode (no API calls, uses fixtures) - no version check needed
+python tests/benchmark_runner.py --mode=replay
+
+# Quick outcome test (~$0.006/run)
+python outcome_eval.py
+```
+
+### Benchmark Thresholds
+
+| Component | Metric | Threshold |
+|-----------|--------|-----------|
+| Event Extraction | F1 | 0.70 |
+| Entity Extraction | F1 | 0.70 |
+| Retrieval | MRR | 0.60 |
+| Retrieval | NDCG | 0.65 |
+| Graph Expansion | F1 | 0.60 |
+
+### E2E Tests
+
+```bash
+cd .claude-workspace/deployment
+
+# Check version and rebuild if needed
+./scripts/version-check.sh test
+
+# Start services (if not already running)
+./scripts/env-up.sh test
+
+# Run E2E tests
+python ../tests/e2e/full_user_simulation.py
 ```
 
 ## Best Practices

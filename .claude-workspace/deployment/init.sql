@@ -341,12 +341,56 @@ CREATE TABLE IF NOT EXISTS category_stats (
 \echo 'Category stats table created successfully'
 
 -- ============================================================================
+-- SECTION 7.2: Entity Edge Table (V8)
+-- ============================================================================
+
+-- Explicit edges between entities for relationship-based graph traversal
+-- V8: Named relationships like MANAGES, DECIDED, CAUSED
+CREATE TABLE IF NOT EXISTS entity_edge (
+    -- Primary Key
+    edge_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    -- Source and target entities
+    source_entity_id UUID NOT NULL REFERENCES entity(entity_id) ON DELETE CASCADE,
+    target_entity_id UUID NOT NULL REFERENCES entity(entity_id) ON DELETE CASCADE,
+
+    -- Relationship definition
+    relationship_type VARCHAR(50) NOT NULL,  -- e.g., "MANAGES", "DECIDED", "WORKS_WITH"
+    relationship_name TEXT,                   -- Optional custom label
+
+    -- Provenance
+    artifact_uid TEXT NOT NULL,              -- Document where edge was extracted
+    revision_id TEXT NOT NULL,
+
+    -- Quality
+    confidence FLOAT NOT NULL DEFAULT 0.8 CHECK (confidence >= 0.0 AND confidence <= 1.0),
+
+    -- Evidence
+    evidence_quote TEXT,                     -- Supporting text span (max ~50 words)
+
+    -- Timestamps
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+
+    -- Constraints
+    CHECK (source_entity_id != target_entity_id),
+    UNIQUE (source_entity_id, target_entity_id, relationship_type, artifact_uid)
+);
+
+-- Indexes for graph traversal
+CREATE INDEX IF NOT EXISTS idx_entity_edge_source ON entity_edge(source_entity_id);
+CREATE INDEX IF NOT EXISTS idx_entity_edge_target ON entity_edge(target_entity_id);
+CREATE INDEX IF NOT EXISTS idx_entity_edge_type ON entity_edge(relationship_type);
+CREATE INDEX IF NOT EXISTS idx_entity_edge_artifact ON entity_edge(artifact_uid, revision_id);
+
+\echo 'Entity edge table created successfully (V8)'
+
+-- ============================================================================
 -- SECTION 8: Verify Installation
 -- ============================================================================
 
 \echo ''
 \echo '========================================='
-\echo 'MCP Memory Server V5 Database Initialized'
+\echo 'MCP Memory Server V8 Database Initialized'
 \echo '========================================='
 \echo ''
 
@@ -384,7 +428,12 @@ UNION ALL
 SELECT
     'event_subject' AS table_name,
     COUNT(*) AS row_count
-FROM event_subject;
+FROM event_subject
+UNION ALL
+SELECT
+    'entity_edge' AS table_name,
+    COUNT(*) AS row_count
+FROM entity_edge;
 
 \echo ''
 \echo 'Database ready for use!'

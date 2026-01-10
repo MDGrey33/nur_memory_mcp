@@ -1,0 +1,38 @@
+
+==================================================
+MCP OUTCOME EVALUATION
+==================================================
+
+Connecting to MCP at http://localhost:3201...
+Connected!
+
+Storing documents...
+  Stored: outcome_test/meeting.txt
+  Stored: outcome_test/email.txt
+  Stored: outcome_test/decision.txt
+  Waiting for event extraction...
+Querying: What is Priya working on for the Zephyr project and who else is involved?
+Evaluating with LLM...
+
+==================================================
+RESULTS
+==================================================
+
+  [92m✓[0m Priya is working on a GraphQL API for Zephyr analytics dashboard
+      Evidence: "Priya presented the design for the new Zephyr analytics dashboard...."
+  [92m✓[0m The API deadline is December 20th
+      Evidence: "She committed to deliver the GraphQL API by December 20th...."
+  [92m✓[0m Marcus Weber is involved with the MongoDB database schema
+      Evidence: "Marcus will handle the MongoDB database schema design...."
+  [92m✓[0m Elena Rodriguez is involved as project manager or stakeholder
+      Evidence: "Elena Rodriguez (Project Manager)..."
+  [92m✓[0m MongoDB was chosen as the database
+      Evidence: "Decision: Use GraphQL architecture with MongoDB backend...."
+
+Score: 5 found, 0 partial, 0 missing
+Pass Rate: 100% (threshold: 80%)
+
+[92m>>> PASS <<<[0m
+
+Reasoning: All expected outcomes were clearly found in the response, leading to a passing result.
+

@@ -1,0 +1,47 @@
+============================================================
+RETRIEVAL PERFORMANCE BENCHMARK
+============================================================
+
+Connecting to http://localhost:3201...
+Connected!
+
+Running 5 iterations per query...
+
+  Iteration 1/5 complete
+  Iteration 2/5 complete
+  Iteration 3/5 complete
+  Iteration 4/5 complete
+  Iteration 5/5 complete
+
+============================================================
+RESULTS
+============================================================
+
+Overall Latency (ms):
+  Min:  401.9
+  p50:  431.9
+  p95:  540.9
+  p99:  547.5
+  Max:  547.5
+  Mean: 444.5
+
+Per-Query Latency (ms):
+  What did Alice decide?                   avg: 446.5
+  Who is working on the API?               avg: 423.1
+  What are Bob's commitments?              avg: 433.7
+  Tell me about the caching layer project  avg: 438.0
+  What risks were identified in the meetin avg: 480.9
+
+============================================================
+
+METRICS_JSON:
+{
+  "min_ms": 401.9,
+  "p50_ms": 431.9,
+  "p95_ms": 540.9,
+  "p99_ms": 547.5,
+  "max_ms": 547.5,
+  "mean_ms": 444.5,
+  "total_queries": 25,
+  "errors": 0
+}

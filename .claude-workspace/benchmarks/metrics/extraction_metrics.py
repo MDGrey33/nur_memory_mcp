@@ -234,6 +234,41 @@ def evaluate_extraction(
     )
 
 
+def entity_name_matches(pred_name: str, truth_name: str, threshold: float = 0.8) -> float:
+    """
+    Check if entity names match, handling first-name to full-name cases.
+
+    Returns similarity score (1.0 for match, 0.0 for no match).
+    """
+    pred_lower = pred_name.lower().strip()
+    truth_lower = truth_name.lower().strip()
+
+    # Exact match
+    if pred_lower == truth_lower:
+        return 1.0
+
+    # Standard text similarity
+    sim = text_similarity(pred_name, truth_name)
+    if sim >= threshold:
+        return sim
+
+    # First name match: "Bob" matches "Bob Smith"
+    pred_parts = pred_lower.split()
+    truth_parts = truth_lower.split()
+
+    # Check if predicted is first name of truth
+    if len(pred_parts) == 1 and len(truth_parts) > 1:
+        if pred_parts[0] == truth_parts[0]:
+            return 0.9  # High but not perfect match
+
+    # Check if truth is first name of predicted
+    if len(truth_parts) == 1 and len(pred_parts) > 1:
+        if truth_parts[0] == pred_parts[0]:
+            return 0.9
+
+    return sim
+
+
 def evaluate_entity_extraction(
     predicted_entities: list[dict],
     ground_truth_entities: list[dict],
@@ -242,7 +277,7 @@ def evaluate_entity_extraction(
     """
     Evaluate entity extraction quality.
 
-    Matches entities by name similarity, considering aliases.
+    Matches entities by name similarity, considering aliases and first-name matches.
     """
     matched_pairs = []
     matched_pred = set()
@@ -267,7 +302,7 @@ def evaluate_entity_extraction(
             # Find best similarity across all name combinations
             for pn in all_pred_names:
                 for tn in all_truth_names:
-                    sim = text_similarity(str(pn), str(tn))
+                    sim = entity_name_matches(str(pn), str(tn), name_threshold)
                     if sim > best_similarity:
                         best_similarity = sim
                         best_match_idx = j

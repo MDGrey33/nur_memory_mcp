@@ -2,6 +2,61 @@
 
 A Model Context Protocol (MCP) server for persistent memory and context management with **semantic event extraction**, **graph-backed context expansion**, and **quality benchmarks**. Provides semantic search, artifact storage, and event + entity context packs.
 
+---
+
+## Philosophy: Total Recall Over Precision
+
+MCP Memory is designed as an **extension of the human mind**, not just a work productivity tool.
+
+### Core Principles
+
+**1. Capture Everything, Filter Nothing**
+
+The human brain processes vast amounts of information daily - conversations, observations, ideas, facts, emotions, transactions, movements, relationships. A true memory system should capture the full spectrum of human experience, not just "work events."
+
+Modern LLMs (GPT-4o+, Claude Opus, etc.) are capable of extracting nuanced categories from any content. We should leverage this capability fully rather than constraining it to a fixed taxonomy.
+
+**2. Noise Is Acceptable, Missing Information Is Not**
+
+> *"All relevant data plus noise is better than partial recall with no noise."*
+
+The human brain deals with noise constantly - irrelevant memories surface alongside relevant ones, and we naturally filter. LLMs can do the same. What they cannot do is recall information that was never stored or was filtered out during extraction.
+
+**Prefer recall over precision.** Return more context than needed and let the consuming LLM decide relevance.
+
+**3. Let Usage Define Structure**
+
+Instead of pre-defining rigid categories, let the system evolve:
+- **Events**: Any occurrence worth remembering - the system suggests categories, not the other way around
+- **Entities**: Any person, place, thing, concept, or abstraction that participates in events
+- **Relationships**: Emerge from co-occurrence in events and explicit mentions
+
+Entity schemas should expand based on the queries received. If users frequently ask about "health" or "finances," the system should develop richer representations for those domains.
+
+**4. Connected Context Over Isolated Facts**
+
+Memory isn't a flat list - it's a graph. Every piece of information connects to:
+- **Who** was involved (entities)
+- **What** happened (events)
+- **When** it occurred (temporal)
+- **Where** it happened (spatial)
+- **Why** it matters (causal links)
+- **What else** is related (associative links)
+
+Recall should traverse this graph liberally, returning the full context web rather than isolated matches.
+
+### Design Implications
+
+| Traditional Approach | MCP Memory Approach |
+|---------------------|---------------------|
+| Fixed event categories | Dynamic, LLM-suggested categories |
+| Filter noise at extraction | Filter noise at recall (or not at all) |
+| Precision-optimized retrieval | Recall-optimized retrieval |
+| Schema-first design | Usage-driven schema evolution |
+| Work-focused taxonomy | Life-encompassing taxonomy |
+
+---
+
 ## What's New in V7
 
 - **Quality Benchmark Suite** - Comprehensive benchmarks for event extraction, entity resolution, recall relevance, and graph expansion with replay mode for CI/CD

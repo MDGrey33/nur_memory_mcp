@@ -488,6 +488,8 @@ class RetrievalService:
         include_entities: bool = False,
         context_filter: Optional[str] = None,
         min_importance: Optional[float] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
     ) -> V4SearchResult:
         """
         V6 hybrid search over content and chunks collections.
@@ -504,6 +506,8 @@ class RetrievalService:
             include_entities: Include entity info
             context_filter: Filter by context type (meeting, email, note, etc.)
             min_importance: Filter by minimum importance
+            date_from: Filter results after this ISO date (e.g., "2026-01-01")
+            date_to: Filter results before this ISO date (e.g., "2026-12-31")
 
         Returns:
             V4SearchResult with primary_results, related_context, entities
@@ -601,6 +605,22 @@ class RetrievalService:
                     doc_importance = candidate["metadata"].get("importance", 0.5)
                     if doc_importance < min_importance:
                         continue
+
+                # V7.3: Filter by date range if specified
+                if date_from or date_to:
+                    # Get document timestamp from metadata (ts or ingested_at)
+                    doc_ts = candidate["metadata"].get("ts") or candidate["metadata"].get("ingested_at")
+                    if doc_ts:
+                        try:
+                            # Parse document timestamp (supports ISO format)
+                            doc_date = doc_ts[:10] if len(doc_ts) >= 10 else doc_ts  # Extract YYYY-MM-DD
+                            if date_from and doc_date < date_from:
+                                continue
+                            if date_to and doc_date > date_to:
+                                continue
+                        except (TypeError, ValueError):
+                            # If date parsing fails, include the document
+                            pass
 
                 seen_artifacts.add(artifact_id)
 
@@ -829,6 +849,26 @@ class RetrievalService:
             FROM event_subject
             WHERE event_id IN ({seed_placeholders})
         ),
+        -- V8: Get entities connected via explicit edges
+        edge_connected_entities AS (
+            SELECT DISTINCT
+                ee.target_entity_id AS entity_id,
+                ee.relationship_type
+            FROM entity_edge ee
+            JOIN seed_entities s ON s.entity_id = ee.source_entity_id
+            UNION
+            SELECT DISTINCT
+                ee.source_entity_id AS entity_id,
+                ee.relationship_type
+            FROM entity_edge ee
+            JOIN seed_entities s ON s.entity_id = ee.target_entity_id
+        ),
+        -- All connected entities (direct from events + via edges)
+        all_connected_entities AS (
+            SELECT entity_id, 'seed' AS connection_source FROM seed_entities
+            UNION
+            SELECT entity_id, relationship_type AS connection_source FROM edge_connected_entities
+        ),
         connected_events AS (
             -- Find events that share these entities (excluding seeds)
             SELECT DISTINCT
@@ -841,21 +881,23 @@ class RetrievalService:
                 se.confidence,
                 e.canonical_name AS connecting_entity,
                 CASE
-                    WHEN ea.event_id IS NOT NULL THEN 'same_actor'
-                    WHEN es.event_id IS NOT NULL THEN 'same_subject'
+                    WHEN ea.event_id IS NOT NULL AND ace.connection_source = 'seed' THEN 'same_actor'
+                    WHEN es.event_id IS NOT NULL AND ace.connection_source = 'seed' THEN 'same_subject'
+                    WHEN ea.event_id IS NOT NULL THEN 'edge:' || ace.connection_source
+                    WHEN es.event_id IS NOT NULL THEN 'edge:' || ace.connection_source
                 END AS connection_type
             FROM semantic_event se
-            JOIN seed_entities s ON 1=1
-            LEFT JOIN event_actor ea ON ea.event_id = se.event_id AND ea.entity_id = s.entity_id
-            LEFT JOIN event_subject es ON es.event_id = se.event_id AND es.entity_id = s.entity_id
-            JOIN entity e ON e.entity_id = s.entity_id
+            JOIN all_connected_entities ace ON 1=1
+            LEFT JOIN event_actor ea ON ea.event_id = se.event_id AND ea.entity_id = ace.entity_id
+            LEFT JOIN event_subject es ON es.event_id = se.event_id AND es.entity_id = ace.entity_id
+            JOIN entity e ON e.entity_id = ace.entity_id
             WHERE (ea.event_id IS NOT NULL OR es.event_id IS NOT NULL)
               AND se.event_id NOT IN ({seed_placeholders})
               {category_clause}
               {artifact_clause}
         ),
         ranked AS (
-            -- Deduplicate and rank by connection type (actor > subject)
+            -- Deduplicate and rank by connection type (actor > subject > edge)
             SELECT DISTINCT ON (event_id)
                 event_id,
                 artifact_uid,
@@ -867,7 +909,12 @@ class RetrievalService:
                 connecting_entity,
                 connection_type
             FROM connected_events
-            ORDER BY event_id, connection_type DESC  -- actor first
+            ORDER BY event_id,
+                CASE
+                    WHEN connection_type = 'same_actor' THEN 1
+                    WHEN connection_type = 'same_subject' THEN 2
+                    ELSE 3
+                END
         )
         SELECT * FROM ranked
         LIMIT {budget}

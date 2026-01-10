@@ -143,15 +143,41 @@ recall(query) ←──────── Vector search ←──── Graph ex
 
 ### Event Categories
 
-The system extracts 8 semantic event types: `Decision`, `Commitment`, `Execution`, `Collaboration`, `QualityRisk`, `Feedback`, `Change`, `Stakeholder`.
+V7.3 uses dynamic categories (LLM-suggested, not fixed enum). Common categories include: `Decision`, `Commitment`, `Execution`, `Collaboration`, `QualityRisk`, `Feedback`, `Change`, `Stakeholder`.
 
 ### Graph Model
 
-Apache AGE graph (`nur`) with:
-- `Entity` nodes (PERSON, ORGANIZATION, PROJECT)
-- `Event` nodes (extracted semantic events)
-- `ACTED_IN` edges (entity → event)
-- `ABOUT` edges (event → entity)
+V8 (current): SQL-based graph with explicit edges:
+- `event_actor`/`event_subject` tables link entities to events
+- `entity_edge` table stores named relationships (MANAGES, DECIDED, COMMITTED_TO, etc.)
+- Graph expansion finds related documents through both shared entities AND explicit edges
+
+**Edge Categories**: Interpersonal (MANAGES, WORKS_WITH), Ownership (ASSIGNED_TO, COMMITTED_TO), Decisions (DECIDED, APPROVED), Causality (CAUSED, BLOCKED), Reference (RELATES_TO)
+
+## Roadmap
+
+### V9: Consolidation Release (Current)
+
+**Status**: Active
+
+**Consolidates**: V7.3 (triplet scoring), V8 (API completion), V8.1 (embedding cache)
+
+**Phases**:
+1. **Extraction Quality Fix** (CRITICAL) - F1 is 0.19, needs investigation
+2. **API Completion** - Add `edge_types` and `include_edges` params to recall()
+3. **Triplet Scoring** - Re-enable with embedding cache for acceptable latency
+
+**Spec**: `.claude-workspace/specs/v9-consolidation.md`
+
+### Current Benchmark Status (2026-01-10)
+
+| Component | Score | Target | Status |
+|-----------|-------|--------|--------|
+| Retrieval MRR | 0.81 | 0.60 | PASS |
+| Retrieval NDCG | 0.82 | 0.65 | PASS |
+| Graph Conn F1 | 0.51 | 0.60 | Close |
+| Entity F1 | 0.58 | 0.70 | Needs work |
+| Extraction F1 | 0.33 | 0.70 | Improved (was 0.19) |
 
 ## Claude Mind Development Workflow
 
