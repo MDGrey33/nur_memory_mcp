@@ -9,6 +9,7 @@ Features:
 """
 
 import logging
+import math
 import os
 from typing import List, Dict, Optional, Any, Tuple
 from dataclasses import dataclass, field
@@ -147,6 +148,126 @@ class RetrievalService:
         self.k = k
         self.pg_client = pg_client
 
+    # =========================================================================
+    # V7.3: Triplet Scoring Helpers
+    # =========================================================================
+
+    def _cosine_distance(
+        self,
+        vec1: List[float],
+        vec2: List[float]
+    ) -> float:
+        """
+        Calculate cosine distance between two vectors.
+        Distance = 1 - cosine_similarity. Range: [0, 2]
+        Lower = more similar.
+        """
+        if not vec1 or not vec2 or len(vec1) != len(vec2):
+            return 2.0  # Max distance for invalid vectors
+
+        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        norm1 = math.sqrt(sum(a * a for a in vec1))
+        norm2 = math.sqrt(sum(b * b for b in vec2))
+
+        if norm1 == 0 or norm2 == 0:
+            return 2.0
+
+        cosine_similarity = dot_product / (norm1 * norm2)
+        return 1.0 - cosine_similarity
+
+    async def _score_triplets(
+        self,
+        events: List[Dict[str, Any]],
+        query_embedding: List[float],
+        event_weight: float = 1.5
+    ) -> List[Dict[str, Any]]:
+        """
+        Score and sort events using triplet-inspired scoring.
+
+        For each event, score = entity_distance + (event_distance * weight)
+        where:
+        - entity_distance: cosine distance of connecting entity name to query
+        - event_distance: cosine distance of event narrative to query
+
+        Args:
+            events: List of related events with 'narrative' and 'reason' fields
+            query_embedding: Pre-computed query embedding
+            event_weight: Weight for event narrative (default 1.5)
+
+        Returns:
+            Events sorted by triplet score (lowest first = most relevant)
+        """
+        if not events:
+            return []
+
+        # Batch embed all texts for efficiency
+        # Format: [narrative1, entity1, narrative2, entity2, ...]
+        texts_to_embed = []
+        for event in events:
+            narrative = event.get("narrative", "")
+            # Extract entity name from reason (format: "same_actor:Alice Chen")
+            reason = event.get("reason", "")
+            entity_name = reason.split(":", 1)[1] if ":" in reason else reason
+            texts_to_embed.extend([narrative, entity_name])
+
+        # Filter out empty texts and track indices
+        valid_indices = []
+        valid_texts = []
+        for i, text in enumerate(texts_to_embed):
+            if text and text.strip():
+                valid_indices.append(i)
+                valid_texts.append(text)
+
+        if not valid_texts:
+            # No valid texts, return events in original order with default score
+            for event in events:
+                event["triplet_score"] = 2.0
+            return events
+
+        # Generate embeddings
+        try:
+            embeddings = self.embedding_service.generate_embeddings_batch(valid_texts)
+        except Exception as e:
+            logger.warning(f"Triplet scoring embedding failed: {e}, using default scores")
+            for event in events:
+                event["triplet_score"] = 2.0
+            return events
+
+        # Map embeddings back to events
+        embedding_map = {}
+        for idx, emb in zip(valid_indices, embeddings):
+            embedding_map[idx] = emb
+
+        # Score each event
+        scored_events = []
+        for i, event in enumerate(events):
+            narrative_idx = i * 2
+            entity_idx = i * 2 + 1
+
+            narrative_emb = embedding_map.get(narrative_idx, [])
+            entity_emb = embedding_map.get(entity_idx, [])
+
+            event_dist = self._cosine_distance(query_embedding, narrative_emb)
+            entity_dist = self._cosine_distance(query_embedding, entity_emb)
+
+            # Triplet score: lower is better
+            triplet_score = entity_dist + (event_dist * event_weight)
+
+            event["triplet_score"] = triplet_score
+            event["event_distance"] = event_dist
+            event["entity_distance"] = entity_dist
+            scored_events.append(event)
+
+        # Sort by triplet score (ascending = most relevant first)
+        scored_events.sort(key=lambda x: x["triplet_score"])
+
+        logger.info(
+            f"Triplet scoring: scored {len(scored_events)} events, "
+            f"best={scored_events[0]['triplet_score']:.3f} if scored_events else 'N/A'"
+        )
+
+        return scored_events
+
     def merge_results_rrf(
         self,
         results_by_collection: Dict[str, List[SearchResult]],
@@ -255,7 +376,10 @@ class RetrievalService:
         budget: int = 10,
         category_filter: Optional[List[str]] = None,
         include_entities: bool = False,
-        seed_event_ids: Optional[List[UUID]] = None
+        seed_event_ids: Optional[List[UUID]] = None,
+        query_embedding: Optional[List[float]] = None,
+        use_triplet_scoring: bool = True,
+        candidate_artifact_uids: Optional[List[str]] = None
     ) -> Tuple[List[RelatedContextItem], List[EntityInfo]]:
         """
         Perform graph expansion from primary results.
@@ -291,11 +415,25 @@ class RetrievalService:
                 return [], []
 
             # Step 2: Perform graph expansion via SQL joins (V5 - no AGE required)
+            # Fetch more than budget if using triplet scoring, to allow for re-ranking
+            fetch_budget = budget * 2 if (use_triplet_scoring and query_embedding) else budget
             related_events = await self._expand_from_events_sql(
                 seed_event_ids=seed_event_ids,
-                budget=budget,
-                category_filter=category_filter
+                budget=fetch_budget,
+                category_filter=category_filter,
+                candidate_artifact_uids=candidate_artifact_uids  # V7.3: Two-phase filter
             )
+
+            # Step 2.5: V7.3 Triplet scoring - re-rank events by semantic relevance
+            if use_triplet_scoring and query_embedding and related_events:
+                related_events = await self._score_triplets(
+                    events=related_events,
+                    query_embedding=query_embedding,
+                    event_weight=1.5
+                )
+                # Trim to budget after re-ranking
+                related_events = related_events[:budget]
+                logger.info(f"Triplet scoring applied: {len(related_events)} events after re-ranking")
 
             # Events are already deduplicated in the SQL query
             related_event_ids = [UUID(event["event_id"]) if isinstance(event["event_id"], str) else event["event_id"]
@@ -489,18 +627,30 @@ class RetrievalService:
             entities = []
 
             if expand and primary_results and self.pg_client:
-                # Get seed event IDs from primary results
-                seed_event_ids = await self._get_seed_events(primary_results[:1])
+                # V7.3: Two-phase retrieval - use more seeds and collect candidate artifacts
+                # Use up to 3 results for seeding (vs old: just top 1)
+                seed_results = primary_results[:min(3, len(primary_results))]
+                seed_event_ids = await self._get_seed_events(seed_results)
+
+                # Collect all artifact_uids from primary results for two-phase filtering
+                candidate_artifact_uids = []
+                for result in primary_results:
+                    artifact_uid = result.result.metadata.get("artifact_uid")
+                    if artifact_uid and artifact_uid not in candidate_artifact_uids:
+                        candidate_artifact_uids.append(artifact_uid)
 
                 if seed_event_ids:
                     category_filter = graph_filters.get("categories") if graph_filters else None
                     related_context, entities = await self._perform_graph_expansion(
-                        primary_results=primary_results[:1],
+                        primary_results=seed_results,
                         depth=1,
                         budget=graph_budget,
                         category_filter=category_filter,
                         include_entities=include_entities,
-                        seed_event_ids=seed_event_ids
+                        seed_event_ids=seed_event_ids,
+                        query_embedding=query_embedding,  # V7.3: Pass for triplet scoring
+                        use_triplet_scoring=False,  # V7.3: Disabled - 2.4x latency increase
+                        candidate_artifact_uids=candidate_artifact_uids if candidate_artifact_uids else None
                     )
 
             return V4SearchResult(
@@ -624,17 +774,20 @@ class RetrievalService:
         self,
         seed_event_ids: List[UUID],
         budget: int = 10,
-        category_filter: Optional[List[str]] = None
+        category_filter: Optional[List[str]] = None,
+        candidate_artifact_uids: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """
         Find related events via shared actors/subjects using pure SQL joins.
 
         V6 graph expansion via SQL (no AGE dependency).
+        V7.3: Added candidate_artifact_uids for two-phase retrieval optimization.
 
         Args:
             seed_event_ids: Event IDs to expand from
             budget: Maximum related events to return
             category_filter: Event categories to include (e.g., ["Decision", "Commitment"])
+            candidate_artifact_uids: V7.3 two-phase filter - only return events from these artifacts
 
         Returns:
             List of related event dicts with reason for connection
@@ -644,16 +797,26 @@ class RetrievalService:
 
         # Build placeholders for seed event IDs
         seed_placeholders = ", ".join(f"${i+1}" for i in range(len(seed_event_ids)))
+        params = list(seed_event_ids)
+        param_offset = len(seed_event_ids)
 
-        # Base query to find connected events via shared entities
-        # Use category filter if provided
+        # Build optional clauses
+        category_clause = ""
+        artifact_clause = ""
+
+        # Category filter
         if category_filter:
-            cat_placeholders = ", ".join(f"${len(seed_event_ids)+i+1}" for i in range(len(category_filter)))
+            cat_placeholders = ", ".join(f"${param_offset+i+1}" for i in range(len(category_filter)))
             category_clause = f"AND se.category IN ({cat_placeholders})"
-            params = list(seed_event_ids) + category_filter
-        else:
-            category_clause = ""
-            params = list(seed_event_ids)
+            params.extend(category_filter)
+            param_offset += len(category_filter)
+
+        # V7.3: Two-phase artifact filter
+        if candidate_artifact_uids:
+            art_placeholders = ", ".join(f"${param_offset+i+1}" for i in range(len(candidate_artifact_uids)))
+            artifact_clause = f"AND se.artifact_uid IN ({art_placeholders})"
+            params.extend(candidate_artifact_uids)
+            logger.info(f"Two-phase filter: restricting to {len(candidate_artifact_uids)} candidate artifacts")
 
         sql = f"""
         WITH seed_entities AS (
@@ -689,6 +852,7 @@ class RetrievalService:
             WHERE (ea.event_id IS NOT NULL OR es.event_id IS NOT NULL)
               AND se.event_id NOT IN ({seed_placeholders})
               {category_clause}
+              {artifact_clause}
         ),
         ranked AS (
             -- Deduplicate and rank by connection type (actor > subject)

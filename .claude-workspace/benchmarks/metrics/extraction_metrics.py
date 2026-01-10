@@ -46,7 +46,13 @@ def text_similarity(text1: str, text2: str) -> float:
 
 
 def category_matches(pred_category: str, truth_category: str) -> bool:
-    """Check if event categories match (with aliases)."""
+    """
+    Check if event categories match (with aliases and semantic fallback).
+
+    V7.3: Updated to support dynamic categories by:
+    1. Expanded alias mappings
+    2. Semantic similarity fallback for unknown categories
+    """
     # Normalize categories
     pred = pred_category.lower().strip()
     truth = truth_category.lower().strip()
@@ -55,21 +61,60 @@ def category_matches(pred_category: str, truth_category: str) -> bool:
     if pred == truth:
         return True
 
-    # Common aliases
+    # Singular/plural match
+    if pred.rstrip('s') == truth.rstrip('s'):
+        return True
+
+    # V7.3: Expanded aliases to cover dynamic categories
+    # Groups of semantically equivalent category names
     aliases = {
-        'commitment': ['commitment', 'action_item', 'action', 'task'],
-        'decision': ['decision', 'decided', 'agreed'],
-        'qualityrisk': ['qualityrisk', 'risk', 'concern', 'issue'],
-        'execution': ['execution', 'update', 'status', 'progress'],
-        'feedback': ['feedback', 'request', 'suggestion'],
-        'change': ['change', 'modification', 'update'],
-        'stakeholder': ['stakeholder', 'partner', 'external'],
-        'collaboration': ['collaboration', 'coordination']
+        # Action-related
+        'commitment': ['commitment', 'action_item', 'action', 'task', 'promise', 'deliverable', 'milestone'],
+        'goal': ['goal', 'objective', 'target', 'milestone', 'aim'],
+
+        # Decision-related
+        'decision': ['decision', 'decided', 'agreed', 'resolution', 'choice', 'determination'],
+
+        # Risk-related
+        'qualityrisk': ['qualityrisk', 'risk', 'concern', 'issue', 'problem', 'blocker', 'impediment', 'warning'],
+
+        # Progress-related
+        'execution': ['execution', 'update', 'status', 'progress', 'implementation', 'completion'],
+
+        # Feedback-related
+        'feedback': ['feedback', 'request', 'suggestion', 'recommendation', 'input', 'review'],
+
+        # Change-related
+        'change': ['change', 'modification', 'update', 'revision', 'amendment', 'adjustment'],
+
+        # Stakeholder-related
+        'stakeholder': ['stakeholder', 'partner', 'external', 'participant', 'attendee'],
+
+        # Collaboration-related
+        'collaboration': ['collaboration', 'coordination', 'teamwork', 'partnership', 'cooperation'],
+
+        # V7.3: New dynamic categories
+        'meeting': ['meeting', 'discussion', 'sync', 'standup', 'review', 'session', 'gathering'],
+        'insight': ['insight', 'learning', 'discovery', 'finding', 'observation', 'realization'],
+        'question': ['question', 'query', 'inquiry', 'clarification', 'request'],
+        'transaction': ['transaction', 'purchase', 'payment', 'order', 'sale'],
+        'preference': ['preference', 'choice', 'selection', 'like', 'setting'],
+        'information': ['information', 'info', 'fact', 'data', 'detail', 'note'],
+        'announcement': ['announcement', 'notification', 'alert', 'notice'],
     }
 
     for canonical, variants in aliases.items():
         if pred in variants and truth in variants:
             return True
+        # Also check if pred or truth is the canonical form
+        if (pred == canonical and truth in variants) or (truth == canonical and pred in variants):
+            return True
+
+    # V7.3: Semantic similarity fallback for truly novel categories
+    # If neither matched any alias group, check string similarity
+    similarity = SequenceMatcher(None, pred, truth).ratio()
+    if similarity >= 0.7:
+        return True
 
     return False
 

@@ -286,7 +286,10 @@ class LiveMCPClient:
         'conversations': 'chat',
     }
 
-    def __init__(self, mcp_url: str = "http://localhost:3001"):
+    def __init__(self, mcp_url: str = None):
+        # Use MCP_URL env var, or default to port 3001
+        if mcp_url is None:
+            mcp_url = os.environ.get('MCP_URL', 'http://localhost:3001')
         self.mcp_url = mcp_url.rstrip('/')
         self.session_id = None
         self._request_id = 0
@@ -478,8 +481,8 @@ class LiveMCPClient:
         """
         Extract entities from content.
 
-        In live mode, entities are extracted as part of event extraction.
-        We extract entity names from event actors/subjects.
+        V7.3: Uses actual actors/subjects from extracted events instead of regex.
+        Entity data is in event['actors'] and event['subject'] fields.
         """
         import re
 
@@ -512,22 +515,53 @@ class LiveMCPClient:
         # Wait for extraction to complete
         events = await self._wait_and_fetch_events(artifact_id, max_wait=15)
 
-        # Extract entities from events - look for actors/subjects in narratives
+        # V7.3: Extract entities from actual actors/subjects fields (not regex)
         entities = []
         seen_names = set()
 
         for event in events:
-            # Parse narrative for names (simple heuristic: capitalized words)
-            narrative = event.get('narrative', '')
-            # Find potential person names (First Last pattern)
-            name_pattern = r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b'
-            matches = re.findall(name_pattern, narrative)
-            for name in matches:
-                if name not in seen_names:
+            # Extract from actors field: [{"ref": "name", "role": "..."}]
+            actors = event.get('actors', [])
+            if isinstance(actors, str):
+                try:
+                    actors = json.loads(actors)
+                except json.JSONDecodeError:
+                    actors = []
+            if isinstance(actors, list):
+                for actor in actors:
+                    if isinstance(actor, dict):
+                        name = actor.get('ref', '') or actor.get('name', '')
+                        if name and name not in seen_names:
+                            seen_names.add(name)
+                            entities.append({
+                                'name': name,
+                                'type': 'PERSON'  # Actors are typically people
+                            })
+
+            # Extract from subject field: {"type": "...", "ref": "name"}
+            subject = event.get('subject', {})
+            if isinstance(subject, str):
+                try:
+                    subject = json.loads(subject)
+                except json.JSONDecodeError:
+                    subject = {}
+            if isinstance(subject, dict):
+                name = subject.get('ref', '') or subject.get('name', '')
+                subj_type = subject.get('type', 'other').upper()
+                # Map subject types to entity types
+                type_mapping = {
+                    'PERSON': 'PERSON',
+                    'PROJECT': 'PROJECT',
+                    'ORGANIZATION': 'ORGANIZATION',
+                    'OBJECT': 'OBJECT',
+                    'OTHER': 'OTHER'
+                }
+                entity_type = type_mapping.get(subj_type, 'OTHER')
+                if name and name not in seen_names:
                     seen_names.add(name)
                     entities.append({
                         'name': name,
-                        'type': 'PERSON'
+                        'type': entity_type
                     })
 
         return entities

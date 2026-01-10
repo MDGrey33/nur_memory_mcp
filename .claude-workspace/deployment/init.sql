@@ -135,10 +135,8 @@ CREATE TABLE IF NOT EXISTS semantic_event (
     revision_id TEXT NOT NULL,
 
     -- Event Data
-    category TEXT NOT NULL CHECK (category IN (
-        'Commitment', 'Execution', 'Decision', 'Collaboration',
-        'QualityRisk', 'Feedback', 'Change', 'Stakeholder'
-    )),
+    -- V7.3: Dynamic categories (no fixed enum, just length check)
+    category TEXT NOT NULL CHECK (length(category) >= 1 AND length(category) <= 100),
     event_time TIMESTAMPTZ NULL,  -- Extracted from text, may be null
     narrative TEXT NOT NULL,  -- 1-2 sentence summary
 
@@ -325,6 +323,22 @@ CREATE TABLE IF NOT EXISTS event_subject (
 CREATE INDEX IF NOT EXISTS event_subject_entity_idx ON event_subject(entity_id);
 
 \echo 'Entity tables created successfully'
+
+-- ============================================================================
+-- SECTION 7.1: Category Stats Table (V7.3)
+-- ============================================================================
+
+-- Track category usage for dynamic categories (ACT-R inspired)
+CREATE TABLE IF NOT EXISTS category_stats (
+    category VARCHAR(100) PRIMARY KEY,
+    occurrence_count INTEGER DEFAULT 1,
+    first_seen TIMESTAMP DEFAULT NOW(),
+    last_seen TIMESTAMP DEFAULT NOW(),
+    last_accessed TIMESTAMP,
+    access_count INTEGER DEFAULT 0
+);
+
+\echo 'Category stats table created successfully'
 
 -- ============================================================================
 -- SECTION 8: Verify Installation

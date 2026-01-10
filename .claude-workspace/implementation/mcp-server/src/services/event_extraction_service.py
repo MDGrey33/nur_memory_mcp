@@ -17,8 +17,9 @@ from openai import OpenAI
 logger = logging.getLogger("event_extraction")
 
 
-# Event categories (fixed taxonomy)
-EVENT_CATEGORIES = [
+# V7.3: Dynamic categories - common examples for prompt guidance only
+# These are NOT enforced - LLM can suggest any category
+EVENT_CATEGORY_EXAMPLES = [
     "Commitment",
     "Execution",
     "Decision",
@@ -26,7 +27,16 @@ EVENT_CATEGORIES = [
     "QualityRisk",
     "Feedback",
     "Change",
-    "Stakeholder"
+    "Stakeholder",
+    # Additional categories the LLM may suggest:
+    "Meeting",
+    "Insight",
+    "Goal",
+    "Milestone",
+    "Risk",
+    "Learning",
+    "Question",
+    "Transaction"
 ]
 
 # Entity types (V4)
@@ -40,27 +50,36 @@ ENTITY_TYPES = [
 ]
 
 
-# Prompt A: Extract events AND entities from a single chunk (V4 extended)
+# Prompt A: Extract events AND entities from a single chunk (V4 extended, V7.3 dynamic categories)
 PROMPT_A_SYSTEM = """You are an expert at extracting structured semantic events and entities from text artifacts.
 
 Your task is to identify and extract key events AND entities from the provided text chunk.
 
 ## EVENTS
 
-Focus on these event types (use EXACTLY these category names in your output):
-1. **Commitment**: Promises, deadlines, deliverables (e.g., "Alice will deliver MVP by Q1")
-2. **Execution**: Actions taken, completions (e.g., "Deployed v2.3 to production")
-3. **Decision**: Choices made, directions set (e.g., "Decided to use Postgres over Kafka")
-4. **Collaboration**: Meetings, discussions, handoffs (e.g., "Engineering and design synced on UI")
-5. **QualityRisk**: Issues, blockers, concerns (e.g., "Security audit found XSS vulnerability")
-6. **Feedback**: User input, reviews, critiques (e.g., "Users reported login flow is confusing")
-7. **Change**: Modifications, pivots, updates (e.g., "Changed pricing from $99 to $149")
-8. **Stakeholder**: Who's involved, roles, responsibilities (e.g., "Added Bob as security reviewer")
+Suggest an appropriate category for each event that best describes its type. Use concise, singular nouns.
 
-IMPORTANT: The category field MUST be one of these exact singular values: Commitment, Execution, Decision, Collaboration, QualityRisk, Feedback, Change, Stakeholder. Do NOT use plural forms.
+Common categories include (but are not limited to):
+- **Commitment**: Promises, deadlines, deliverables (e.g., "Alice will deliver MVP by Q1")
+- **Execution**: Actions taken, completions (e.g., "Deployed v2.3 to production")
+- **Decision**: Choices made, directions set (e.g., "Decided to use Postgres over Kafka")
+- **Collaboration**: Meetings, discussions, handoffs (e.g., "Engineering and design synced on UI")
+- **QualityRisk**: Issues, blockers, concerns (e.g., "Security audit found XSS vulnerability")
+- **Feedback**: User input, reviews, critiques (e.g., "Users reported login flow is confusing")
+- **Change**: Modifications, pivots, updates (e.g., "Changed pricing from $99 to $149")
+- **Stakeholder**: Who's involved, roles (e.g., "Added Bob as security reviewer")
+- **Meeting**: Scheduled gatherings, syncs, standups
+- **Insight**: Discoveries, learnings, realizations
+- **Goal**: Objectives, targets, desired outcomes
+- **Milestone**: Project markers, completions, achievements
+- **Risk**: Concerns, potential issues, warnings
+- **Transaction**: Purchases, payments, contracts
+- **Question**: Open queries, unknowns to investigate
+
+You may suggest new categories if none of the above fit well. Use singular nouns (e.g., "Decision" not "Decisions").
 
 For each event, extract:
-- **category**: One of the 8 categories above
+- **category**: A concise singular noun describing the event type (see examples above, or suggest your own)
 - **narrative**: 1-2 sentence summary of what happened
 - **event_time**: ISO8601 timestamp if mentioned, otherwise null
 - **subject**: What the event is about ({"type": "person|project|object|other", "ref": "name"})
@@ -363,10 +382,14 @@ class EventExtractionService:
                 logger.warning(f"Event missing required field: {field}")
                 return False
 
-        # Validate category
-        if event["category"] not in EVENT_CATEGORIES:
-            logger.warning(f"Invalid category: {event['category']}")
+        # V7.3: Accept any category (dynamic categories)
+        # Just validate it's a non-empty string
+        category = event.get("category", "")
+        if not category or not isinstance(category, str) or len(category.strip()) == 0:
+            logger.warning(f"Invalid or empty category: {category}")
             return False
+        # Normalize to singular form and capitalize
+        event["category"] = category.strip().rstrip("s").capitalize() if category.endswith("s") and len(category) > 3 else category.strip().capitalize()
 
         # Validate confidence
         if not (0.0 <= event["confidence"] <= 1.0):

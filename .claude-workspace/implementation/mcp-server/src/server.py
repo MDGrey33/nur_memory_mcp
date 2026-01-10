@@ -536,7 +536,8 @@ async def recall(
 
                     event_rows = await pg_client.fetch_all(
                         """
-                        SELECT event_id, category, narrative, confidence, event_time
+                        SELECT event_id, category, narrative, confidence, event_time,
+                               actors_json, subject_json
                         FROM semantic_event
                         WHERE artifact_uid = $1
                         ORDER BY event_time DESC
@@ -550,7 +551,9 @@ async def recall(
                             "category": row["category"],
                             "narrative": row["narrative"],
                             "confidence": float(row["confidence"]) if row["confidence"] else None,
-                            "event_time": str(row["event_time"]) if row["event_time"] else None
+                            "event_time": str(row["event_time"]) if row["event_time"] else None,
+                            "actors": row["actors_json"],  # V7.3: Include actors for entity extraction
+                            "subject": row["subject_json"]  # V7.3: Include subject for entity extraction
                         })
                 except Exception as e:
                     logger.warning(f"V6 recall: Failed to fetch events: {e}")
