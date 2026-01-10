@@ -27,14 +27,15 @@ from typing import Optional, Dict, Any, List
 # Import MCP client for real infrastructure tests
 import sys
 from pathlib import Path
-lib_path = Path(__file__).parent.parent.parent / "e2e-playwright" / "lib"
+lib_path = Path(__file__).parent.parent / "adapters"
 sys.path.insert(0, str(lib_path))
 
 try:
     from mcp_client import MCPClient, MCPResponse
     MCP_CLIENT_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     MCP_CLIENT_AVAILABLE = False
+    _IMPORT_ERROR = str(e)
 
 
 # =============================================================================
