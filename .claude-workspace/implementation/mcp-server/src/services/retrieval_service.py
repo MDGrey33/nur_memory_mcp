@@ -11,6 +11,7 @@ Features:
 import logging
 import math
 import os
+import time
 from typing import List, Dict, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from uuid import UUID
@@ -189,8 +190,11 @@ class RetrievalService:
         - entity_distance: cosine distance of connecting entity name to query
         - event_distance: cosine distance of event narrative to query
 
+        V9: Uses cached embeddings from semantic_event.embedding when available,
+        only generating embeddings for entity names (which aren't cached).
+
         Args:
-            events: List of related events with 'narrative' and 'reason' fields
+            events: List of related events with 'narrative', 'reason', and optional 'embedding' fields
             query_embedding: Pre-computed query embedding
             event_weight: Weight for event narrative (default 1.5)
 
@@ -200,52 +204,91 @@ class RetrievalService:
         if not events:
             return []
 
-        # Batch embed all texts for efficiency
-        # Format: [narrative1, entity1, narrative2, entity2, ...]
-        texts_to_embed = []
-        for event in events:
-            narrative = event.get("narrative", "")
-            # Extract entity name from reason (format: "same_actor:Alice Chen")
+        # V9: Latency instrumentation
+        t_start = time.perf_counter()
+        t_embed_start = 0.0
+        t_embed_end = 0.0
+
+        # V9: Separate events with cached embeddings from those needing generation
+        cached_narrative_embeddings = {}
+        texts_to_embed = []  # Only entity names (narratives use cache)
+        text_to_event_idx = []  # Track which event each text belongs to
+
+        for i, event in enumerate(events):
+            # Check for cached narrative embedding
+            cached_emb = event.get("embedding")
+            if cached_emb:
+                # pgvector returns string format "[0.1,0.2,...]" - parse if needed
+                if isinstance(cached_emb, str):
+                    try:
+                        cached_emb = [float(x) for x in cached_emb.strip("[]").split(",")]
+                    except (ValueError, AttributeError):
+                        cached_emb = None
+                if cached_emb:
+                    cached_narrative_embeddings[i] = cached_emb
+
+            # Always need to embed entity names (not cached)
             reason = event.get("reason", "")
             entity_name = reason.split(":", 1)[1] if ":" in reason else reason
-            texts_to_embed.extend([narrative, entity_name])
+            if entity_name and entity_name.strip():
+                texts_to_embed.append(entity_name)
+                text_to_event_idx.append(i)
 
-        # Filter out empty texts and track indices
-        valid_indices = []
-        valid_texts = []
-        for i, text in enumerate(texts_to_embed):
-            if text and text.strip():
-                valid_indices.append(i)
-                valid_texts.append(text)
+        # Track cache hit rate
+        cache_hits = len(cached_narrative_embeddings)
+        cache_misses = len(events) - cache_hits
 
-        if not valid_texts:
-            # No valid texts, return events in original order with default score
+        # For events without cached embeddings, add narratives to embed list
+        narrative_indices = {}  # Maps event index to position in texts_to_embed
+        for i, event in enumerate(events):
+            if i not in cached_narrative_embeddings:
+                narrative = event.get("narrative", "")
+                if narrative and narrative.strip():
+                    narrative_indices[i] = len(texts_to_embed)
+                    texts_to_embed.append(narrative)
+                    text_to_event_idx.append(i)
+
+        if not texts_to_embed and not cached_narrative_embeddings:
+            # No valid texts and no cached embeddings
             for event in events:
                 event["triplet_score"] = 2.0
             return events
 
-        # Generate embeddings
-        try:
-            embeddings = self.embedding_service.generate_embeddings_batch(valid_texts)
-        except Exception as e:
-            logger.warning(f"Triplet scoring embedding failed: {e}, using default scores")
-            for event in events:
-                event["triplet_score"] = 2.0
-            return events
-
-        # Map embeddings back to events
-        embedding_map = {}
-        for idx, emb in zip(valid_indices, embeddings):
-            embedding_map[idx] = emb
+        # Generate embeddings only for non-cached texts
+        generated_embeddings = []
+        if texts_to_embed:
+            try:
+                t_embed_start = time.perf_counter()
+                generated_embeddings = self.embedding_service.generate_embeddings_batch(texts_to_embed)
+                t_embed_end = time.perf_counter()
+            except Exception as e:
+                logger.warning(f"Triplet scoring embedding failed: {e}, using default scores")
+                for event in events:
+                    event["triplet_score"] = 2.0
+                return events
 
         # Score each event
         scored_events = []
-        for i, event in enumerate(events):
-            narrative_idx = i * 2
-            entity_idx = i * 2 + 1
+        entity_emb_idx = 0  # Track position in generated embeddings for entity names
 
-            narrative_emb = embedding_map.get(narrative_idx, [])
-            entity_emb = embedding_map.get(entity_idx, [])
+        for i, event in enumerate(events):
+            # Get narrative embedding (from cache or generated)
+            if i in cached_narrative_embeddings:
+                narrative_emb = cached_narrative_embeddings[i]
+            elif i in narrative_indices:
+                narrative_emb = generated_embeddings[narrative_indices[i]]
+            else:
+                narrative_emb = []
+
+            # Get entity embedding (always generated)
+            # Find the entity embedding for this event
+            entity_emb = []
+            for j, evt_idx in enumerate(text_to_event_idx):
+                if evt_idx == i and j < len(generated_embeddings):
+                    # Check if this is an entity (not a narrative)
+                    if i not in narrative_indices or j != narrative_indices[i]:
+                        entity_emb = generated_embeddings[j]
+                        break
 
             event_dist = self._cosine_distance(query_embedding, narrative_emb)
             entity_dist = self._cosine_distance(query_embedding, entity_emb)
@@ -261,10 +304,24 @@ class RetrievalService:
         # Sort by triplet score (ascending = most relevant first)
         scored_events.sort(key=lambda x: x["triplet_score"])
 
-        logger.info(
-            f"Triplet scoring: scored {len(scored_events)} events, "
-            f"best={scored_events[0]['triplet_score']:.3f} if scored_events else 'N/A'"
-        )
+        # V9: Calculate and log latency metrics
+        t_end = time.perf_counter()
+        total_ms = (t_end - t_start) * 1000
+        embed_ms = (t_embed_end - t_embed_start) * 1000 if t_embed_start > 0 else 0
+
+        # Calculate what latency would be without cache (for comparison)
+        # Without cache: would embed entity names + narratives = 2x texts
+        texts_without_cache = len(texts_to_embed) + cache_hits
+        estimated_no_cache_ms = (embed_ms * texts_without_cache / len(texts_to_embed)) if texts_to_embed else 0
+        speedup = estimated_no_cache_ms / embed_ms if embed_ms > 0 else 1.0
+
+        if scored_events:
+            logger.info(
+                f"Triplet scoring: {len(scored_events)} events, "
+                f"cache={cache_hits}/{cache_hits + cache_misses}, "
+                f"texts={len(texts_to_embed)}/{texts_without_cache}, "
+                f"latency={total_ms:.0f}ms (embed={embed_ms:.0f}ms, est_no_cache={estimated_no_cache_ms:.0f}ms, speedup={speedup:.1f}x)"
+            )
 
         return scored_events
 
@@ -672,7 +729,7 @@ class RetrievalService:
                         include_entities=include_entities,
                         seed_event_ids=seed_event_ids,
                         query_embedding=query_embedding,  # V7.3: Pass for triplet scoring
-                        use_triplet_scoring=False,  # V7.3: Disabled - 2.4x latency increase
+                        use_triplet_scoring=True,  # V9: Re-enabled with embedding cache
                         candidate_artifact_uids=candidate_artifact_uids if candidate_artifact_uids else None,
                         edge_types=edge_type_filter  # V9: Edge type filter
                     )
@@ -899,6 +956,7 @@ class RetrievalService:
                 se.narrative,
                 se.event_time,
                 se.confidence,
+                se.embedding,  -- V9: Cached embedding for triplet scoring
                 e.canonical_name AS connecting_entity,
                 CASE
                     WHEN ea.event_id IS NOT NULL AND ace.connection_source = 'seed' THEN 'same_actor'
@@ -926,6 +984,7 @@ class RetrievalService:
                 narrative,
                 event_time,
                 confidence,
+                embedding,  -- V9: Cached embedding for triplet scoring
                 connecting_entity,
                 connection_type
             FROM connected_events
@@ -951,7 +1010,8 @@ class RetrievalService:
                     "narrative": row["narrative"],
                     "event_time": row["event_time"],
                     "confidence": row["confidence"],
-                    "reason": f"{row['connection_type']}:{row['connecting_entity']}"
+                    "reason": f"{row['connection_type']}:{row['connecting_entity']}",
+                    "embedding": row.get("embedding")  # V9: Cached embedding for triplet scoring
                 }
                 for row in rows
             ]

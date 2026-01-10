@@ -12,6 +12,9 @@
 -- Enable pgcrypto for additional crypto functions
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- Enable pgvector extension for embedding support (V4+)
+CREATE EXTENSION IF NOT EXISTS vector;
+
 \echo 'Extensions enabled successfully'
 
 -- ============================================================================
@@ -149,7 +152,10 @@ CREATE TABLE IF NOT EXISTS semantic_event (
     extraction_run_id UUID NOT NULL,  -- Job ID for traceability
 
     -- Timestamps
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    -- V9: Cached embedding for triplet scoring (narrative embedding)
+    embedding vector(3072) NULL
 );
 
 -- Indexes
@@ -247,8 +253,7 @@ EXECUTE FUNCTION update_updated_at_column();
 -- SECTION 7: Entity Tables (V4/V5)
 -- ============================================================================
 
--- Enable pgvector extension for entity embeddings
-CREATE EXTENSION IF NOT EXISTS vector;
+-- Note: pgvector extension is enabled in Section 1 (required by semantic_event in Section 4)
 
 -- entity - Canonical entity registry with embedding support
 CREATE TABLE IF NOT EXISTS entity (

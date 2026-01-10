@@ -552,7 +552,8 @@ class BenchmarkRunner:
 
                 result = evaluate_extraction(
                     predicted_events,
-                    doc_truth['events']
+                    doc_truth['events'],
+                    require_category_match=False  # V7.3: Dynamic categories - match by narrative only
                 )
                 print(f"    -> {doc_id}: {len(predicted_events)} extracted, F1={result.f1:.2f}", flush=True)
                 results.append({

@@ -370,6 +370,20 @@ class EventWorker:
             if event_entities:
                 entity_event_map[str(idx)] = event_entities
 
+        # V9: Generate embeddings for event narratives (for triplet scoring cache)
+        event_embeddings: List[Optional[List[float]]] = []
+        if self.embedding_service and valid_events:
+            narratives = [e.get("narrative", "") for e in valid_events]
+            try:
+                embeddings = self.embedding_service.generate_embeddings_batch(narratives)
+                event_embeddings = embeddings
+                logger.info(f"Generated {len(embeddings)} narrative embeddings for triplet cache")
+            except Exception as e:
+                logger.warning(f"Failed to generate narrative embeddings: {e}")
+                event_embeddings = [None] * len(valid_events)
+        else:
+            event_embeddings = [None] * len(valid_events)
+
         # Write events with entity relationships
         # V6: graph_upsert disabled - expansion uses Postgres joins (no AGE)
         await self.job_service.write_events_atomic_v4(
@@ -378,7 +392,8 @@ class EventWorker:
             extraction_run_id=job_id,
             events=valid_events,
             entity_event_map=entity_event_map,
-            enqueue_graph_upsert=False  # V6: AGE graph removed
+            enqueue_graph_upsert=False,  # V6: AGE graph removed
+            event_embeddings=event_embeddings  # V9: Cache for triplet scoring
         )
 
         # V8: Store explicit edges between entities

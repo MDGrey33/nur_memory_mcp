@@ -428,7 +428,8 @@ class JobQueueService:
         extraction_run_id: UUID,
         events: List[Dict[str, Any]],
         entity_event_map: Dict[str, List[Dict[str, Any]]] = None,
-        enqueue_graph_upsert: bool = False  # V5: Disabled - AGE graph removed
+        enqueue_graph_upsert: bool = False,  # V5: Disabled - AGE graph removed
+        event_embeddings: List[Optional[List[float]]] = None  # V9: Cached embeddings
     ) -> None:
         """
         Write events with V4 entity relationships (replace-on-success).
@@ -437,6 +438,7 @@ class JobQueueService:
         1. Writes events and evidence (V3)
         2. Writes event_actor and event_subject relationships (V4)
         3. Optionally enqueues graph_upsert job (V4) - DISABLED in V5
+        4. Stores narrative embeddings for triplet scoring cache (V9)
 
         Args:
             artifact_uid: Artifact UID
@@ -445,6 +447,7 @@ class JobQueueService:
             events: List of extracted events with evidence
             entity_event_map: Map of event index -> list of {entity_id, role, is_actor}
             enqueue_graph_upsert: Whether to enqueue graph materialization job (V5: disabled)
+            event_embeddings: Pre-computed embeddings for each event narrative (V9)
         """
         entity_event_map = entity_event_map or {}
 
@@ -461,15 +464,19 @@ class JobQueueService:
                     logger.info(f"Deleted old events for {artifact_uid}/{revision_id}")
 
                     event_ids = []
+                    event_embeddings = event_embeddings or []
 
                     # Insert new events
                     for idx, event in enumerate(events):
+                        # V9: Get embedding for this event (if available)
+                        embedding = event_embeddings[idx] if idx < len(event_embeddings) else None
+
                         event_query = """
                         INSERT INTO semantic_event (
                             artifact_uid, revision_id, category, event_time,
                             narrative, subject_json, actors_json, confidence,
-                            extraction_run_id
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                            extraction_run_id, embedding
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                         RETURNING event_id
                         """
 
@@ -482,6 +489,11 @@ class JobQueueService:
                             except (ValueError, TypeError) as e:
                                 logger.warning(f"Invalid event_time: {event.get('event_time')}: {e}")
 
+                        # V9: Convert embedding to string format for pgvector
+                        embedding_str = None
+                        if embedding:
+                            embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
+
                         event_id = await conn.fetchval(
                             event_query,
                             artifact_uid,
@@ -492,7 +504,8 @@ class JobQueueService:
                             json.dumps(event["subject"]),
                             json.dumps(event["actors"]),
                             event["confidence"],
-                            extraction_run_id
+                            extraction_run_id,
+                            embedding_str
                         )
 
                         event_ids.append(event_id)
