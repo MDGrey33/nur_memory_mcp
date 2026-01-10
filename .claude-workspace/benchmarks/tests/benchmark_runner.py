@@ -1,9 +1,7 @@
 """
 V7 Quality Benchmark Runner
 
-Supports two execution modes:
-- replay: Uses recorded fixtures for deterministic CI testing (STRICT - fails on missing fixtures)
-- live: Runs against actual services for full-fidelity evaluation
+Runs against live MCP services for full-fidelity evaluation.
 
 Benchmarks three dimensions:
 1. Event Extraction: Precision/Recall/F1 of event extraction from documents
@@ -12,10 +10,25 @@ Benchmarks three dimensions:
 4. Graph Expansion: Connection precision/recall from entity graph traversal
 
 Usage:
-    python benchmark_runner.py --mode=replay        # Fast, deterministic (CI) - FAILS if fixtures missing
-    python benchmark_runner.py --mode=live          # Full fidelity (nightly)
-    python benchmark_runner.py --record             # Record new fixtures
-    python benchmark_runner.py --check-fixtures     # Verify all fixtures exist
+    python benchmark_runner.py              # Run benchmarks (live mode)
+    python benchmark_runner.py --record     # Record ID mappings for retrieval evaluation
+
+================================================================================
+WARNING: DO NOT IMPLEMENT REPLAY/FIXTURE MODE
+================================================================================
+A replay mode using cached fixtures was previously implemented and removed.
+It caused misleading benchmark comparisons because:
+1. Cached extraction results became stale as the system evolved
+2. Live vs replay comparisons showed false regressions
+3. It provided no meaningful value for quality measurement
+
+If you need faster benchmarks for CI, consider:
+- Running a subset of queries (--max-queries)
+- Using a smaller corpus
+- Caching embeddings (not extraction results)
+
+DO NOT re-implement fixture-based replay without explicit user instruction.
+================================================================================
 """
 
 import argparse
@@ -49,9 +62,7 @@ from retrieval_metrics import (
 @dataclass
 class BenchmarkConfig:
     """Configuration for benchmark execution."""
-    mode: str  # 'replay' or 'live'
     record: bool = False
-    strict: bool = True  # In replay mode, fail if any fixture is missing
     corpus_path: Path = field(default_factory=lambda: BENCHMARK_ROOT / 'corpus')
     ground_truth_path: Path = field(default_factory=lambda: BENCHMARK_ROOT / 'ground_truth')
     queries_path: Path = field(default_factory=lambda: BENCHMARK_ROOT / 'queries' / 'queries.json')
@@ -66,22 +77,13 @@ class BenchmarkConfig:
     min_graph_f1: float = 0.60
 
 
-class FixtureStore:
-    """Manages recorded fixtures for replay mode."""
+class IDMappingStore:
+    """Manages artifact_id -> corpus_path mappings for retrieval evaluation."""
 
     def __init__(self, fixtures_path: Path):
         self.fixtures_path = fixtures_path
-        self.events_path = fixtures_path / 'events'
-        self.entities_path = fixtures_path / 'entities'
-        self.retrievals_path = fixtures_path / 'retrievals'
-        self.graph_path = fixtures_path / 'graph'
         self.id_mapping_file = fixtures_path / 'id_mapping.json'
-
-        # Create directories if needed
-        for path in [self.events_path, self.entities_path, self.retrievals_path, self.graph_path]:
-            path.mkdir(parents=True, exist_ok=True)
-
-        # Load ID mapping (artifact_id -> corpus_path)
+        fixtures_path.mkdir(parents=True, exist_ok=True)
         self.id_mapping = self._load_id_mapping()
 
     def _load_id_mapping(self) -> dict:
@@ -100,179 +102,6 @@ class FixtureStore:
     def translate_id(self, artifact_id: str) -> str:
         """Translate artifact_id to corpus_path, or return original if not found."""
         return self.id_mapping.get(artifact_id, artifact_id)
-
-    def get_extraction_fixture(self, doc_id: str) -> Optional[dict]:
-        """Load recorded extraction result for a document."""
-        fixture_file = self.events_path / f"{doc_id.replace('/', '_')}.json"
-        if fixture_file.exists():
-            with open(fixture_file) as f:
-                return json.load(f)
-        return None
-
-    def save_extraction_fixture(self, doc_id: str, events: list[dict]):
-        """Save extraction result as fixture."""
-        fixture_file = self.events_path / f"{doc_id.replace('/', '_')}.json"
-        with open(fixture_file, 'w') as f:
-            json.dump({
-                'doc_id': doc_id,
-                'events': events,
-                'recorded_at': datetime.now().isoformat()
-            }, f, indent=2)
-
-    def get_entity_fixture(self, doc_id: str) -> Optional[dict]:
-        """Load recorded entity extraction result for a document."""
-        fixture_file = self.entities_path / f"{doc_id.replace('/', '_')}.json"
-        if fixture_file.exists():
-            with open(fixture_file) as f:
-                return json.load(f)
-        return None
-
-    def save_entity_fixture(self, doc_id: str, entities: list[dict]):
-        """Save entity extraction result as fixture."""
-        fixture_file = self.entities_path / f"{doc_id.replace('/', '_')}.json"
-        with open(fixture_file, 'w') as f:
-            json.dump({
-                'doc_id': doc_id,
-                'entities': entities,
-                'recorded_at': datetime.now().isoformat()
-            }, f, indent=2)
-
-    def get_retrieval_fixture(self, query_id: str) -> Optional[dict]:
-        """Load recorded retrieval result for a query."""
-        fixture_file = self.retrievals_path / f"{query_id}.json"
-        if fixture_file.exists():
-            with open(fixture_file) as f:
-                return json.load(f)
-        return None
-
-    def save_retrieval_fixture(self, query_id: str, results: list[str]):
-        """Save retrieval result as fixture."""
-        fixture_file = self.retrievals_path / f"{query_id}.json"
-        with open(fixture_file, 'w') as f:
-            json.dump({
-                'query_id': query_id,
-                'results': results,
-                'recorded_at': datetime.now().isoformat()
-            }, f, indent=2)
-
-    def get_graph_fixture(self, query_id: str) -> Optional[dict]:
-        """Load recorded graph expansion result for a query."""
-        fixture_file = self.graph_path / f"{query_id}.json"
-        if fixture_file.exists():
-            with open(fixture_file) as f:
-                return json.load(f)
-        return None
-
-    def save_graph_fixture(self, query_id: str, connections: list[str], docs: list[str]):
-        """Save graph expansion result as fixture."""
-        fixture_file = self.graph_path / f"{query_id}.json"
-        with open(fixture_file, 'w') as f:
-            json.dump({
-                'query_id': query_id,
-                'connections': connections,
-                'docs': docs,
-                'recorded_at': datetime.now().isoformat()
-            }, f, indent=2)
-
-    def check_fixtures_complete(
-        self,
-        doc_ids: list[str],
-        query_ids: list[str],
-        graph_query_ids: list[str]
-    ) -> dict:
-        """Check if all required fixtures exist."""
-        missing_events = []
-        missing_entities = []
-        missing_retrievals = []
-        missing_graph = []
-
-        for doc_id in doc_ids:
-            if self.get_extraction_fixture(doc_id) is None:
-                missing_events.append(doc_id)
-            if self.get_entity_fixture(doc_id) is None:
-                missing_entities.append(doc_id)
-
-        for query_id in query_ids:
-            if self.get_retrieval_fixture(query_id) is None:
-                missing_retrievals.append(query_id)
-
-        for query_id in graph_query_ids:
-            if self.get_graph_fixture(query_id) is None:
-                missing_graph.append(query_id)
-
-        return {
-            'complete': (
-                len(missing_events) == 0 and
-                len(missing_entities) == 0 and
-                len(missing_retrievals) == 0 and
-                len(missing_graph) == 0
-            ),
-            'missing_events': missing_events,
-            'missing_entities': missing_entities,
-            'missing_retrievals': missing_retrievals,
-            'missing_graph': missing_graph,
-            'events_found': len(doc_ids) - len(missing_events),
-            'events_total': len(doc_ids),
-            'entities_found': len(doc_ids) - len(missing_entities),
-            'entities_total': len(doc_ids),
-            'retrievals_found': len(query_ids) - len(missing_retrievals),
-            'retrievals_total': len(query_ids),
-            'graph_found': len(graph_query_ids) - len(missing_graph),
-            'graph_total': len(graph_query_ids)
-        }
-
-
-class MockMCPClient:
-    """Mock MCP client for replay mode - returns fixtures."""
-
-    def __init__(self, fixture_store: FixtureStore, strict: bool = True):
-        self.fixtures = fixture_store
-        self.strict = strict
-
-    async def extract_events(self, content: str, doc_id: str) -> tuple[list[dict], str]:
-        """Return recorded events from fixture."""
-        fixture = self.fixtures.get_extraction_fixture(doc_id)
-        if fixture:
-            # In replay mode, artifact_id isn't used so return empty string
-            return fixture['events'], ""
-        error_msg = f"No event fixture found for {doc_id}. Run with --record first."
-        if self.strict:
-            raise ValueError(error_msg)
-        print(f"    WARNING: {error_msg}")
-        return [], ""
-
-    async def extract_entities(self, content: str, doc_id: str) -> list[dict]:
-        """Return recorded entities from fixture."""
-        fixture = self.fixtures.get_entity_fixture(doc_id)
-        if fixture:
-            return fixture['entities']
-        error_msg = f"No entity fixture found for {doc_id}. Run with --record first."
-        if self.strict:
-            raise ValueError(error_msg)
-        print(f"    WARNING: {error_msg}")
-        return []
-
-    async def recall(self, query: str, query_id: str) -> list[str]:
-        """Return recorded retrieval results from fixture."""
-        fixture = self.fixtures.get_retrieval_fixture(query_id)
-        if fixture:
-            return fixture['results']
-        error_msg = f"No retrieval fixture found for {query_id}. Run with --record first."
-        if self.strict:
-            raise ValueError(error_msg)
-        print(f"    WARNING: {error_msg}")
-        return []
-
-    async def graph_expand(self, seed_entity: str, query_id: str) -> tuple[list[str], list[str]]:
-        """Return recorded graph expansion results from fixture."""
-        fixture = self.fixtures.get_graph_fixture(query_id)
-        if fixture:
-            return fixture['connections'], fixture['docs']
-        error_msg = f"No graph fixture found for {query_id}. Run with --record first."
-        if self.strict:
-            raise ValueError(error_msg)
-        print(f"    WARNING: {error_msg}")
-        return [], []
 
 
 class LiveMCPClient:
@@ -670,13 +499,9 @@ class BenchmarkRunner:
 
     def __init__(self, config: BenchmarkConfig):
         self.config = config
-        self.fixture_store = FixtureStore(config.fixtures_path)
+        self.id_store = IDMappingStore(config.fixtures_path)
+        self.client = LiveMCPClient()
         self.errors = []
-
-        if config.mode == 'replay':
-            self.client = MockMCPClient(self.fixture_store, strict=config.strict)
-        else:
-            self.client = LiveMCPClient()
 
     def load_ground_truth(self) -> tuple[dict, dict, dict]:
         """Load ground truth events, entities, and graph connections."""
@@ -709,17 +534,6 @@ class BenchmarkRunner:
         with open(full_path) as f:
             return f.read()
 
-    def check_fixtures(self) -> dict:
-        """Check if all required fixtures exist for replay mode."""
-        events_truth, entities_truth, graph_truth = self.load_ground_truth()
-        queries = self.load_queries()
-
-        doc_ids = list(events_truth.get('documents', {}).keys())
-        query_ids = [q['id'] for q in queries]
-        graph_query_ids = [q['id'] for q in graph_truth.get('benchmark_queries', [])]
-
-        return self.fixture_store.check_fixtures_complete(doc_ids, query_ids, graph_query_ids)
-
     async def run_extraction_benchmarks(self, events_truth: dict) -> dict:
         """Run event extraction quality benchmarks."""
         results = []
@@ -733,11 +547,8 @@ class BenchmarkRunner:
                 content = self.load_document(doc_id)
                 predicted_events, artifact_id = await self.client.extract_events(content, doc_id)
 
-                if self.config.record:
-                    self.fixture_store.save_extraction_fixture(doc_id, predicted_events)
-                    # Save ID mapping for retrieval evaluation
-                    if artifact_id:
-                        self.fixture_store.save_id_mapping(artifact_id, doc_id)
+                if self.config.record and artifact_id:
+                    self.id_store.save_id_mapping(artifact_id, doc_id)
 
                 result = evaluate_extraction(
                     predicted_events,
@@ -761,15 +572,6 @@ class BenchmarkRunner:
                     'doc_id': doc_id,
                     'error': str(e)
                 })
-
-        # In strict mode, any error is a failure
-        if self.config.strict and errors:
-            return {
-                'per_document': results,
-                'aggregated': {},
-                'pass': False,
-                'errors': errors
-            }
 
         # Aggregate results (only from successful evaluations)
         valid_results = [r for r in results if 'error' not in r]
@@ -819,9 +621,6 @@ class BenchmarkRunner:
                 content = self.load_document(doc_id)
                 predicted_entities = await self.client.extract_entities(content, doc_id)
 
-                if self.config.record:
-                    self.fixture_store.save_entity_fixture(doc_id, predicted_entities)
-
                 result = evaluate_entity_extraction(
                     predicted_entities,
                     doc_truth['entities']
@@ -843,15 +642,6 @@ class BenchmarkRunner:
                     'doc_id': doc_id,
                     'error': str(e)
                 })
-
-        # In strict mode, any error is a failure
-        if self.config.strict and errors:
-            return {
-                'per_document': results,
-                'aggregated': {},
-                'pass': False,
-                'errors': errors
-            }
 
         # Aggregate results
         valid_results = [r for r in results if 'error' not in r]
@@ -901,12 +691,9 @@ class BenchmarkRunner:
             try:
                 retrieved = await self.client.recall(query_text, query_id)
 
-                if self.config.record:
-                    self.fixture_store.save_retrieval_fixture(query_id, retrieved)
-
                 # Translate artifact IDs to corpus paths for evaluation
                 translated_retrieved = [
-                    self.fixture_store.translate_id(doc_id)
+                    self.id_store.translate_id(doc_id)
                     for doc_id in retrieved
                 ]
 
@@ -933,16 +720,6 @@ class BenchmarkRunner:
                     'query_id': query_id,
                     'error': str(e)
                 })
-
-        # In strict mode, any error is a failure
-        if self.config.strict and errors:
-            return {
-                'per_query': results,
-                'aggregated': {},
-                'pass_mrr': False,
-                'pass_ndcg': False,
-                'errors': errors
-            }
 
         # Aggregate (only from successful evaluations)
         valid_results = [r for r in results if 'error' not in r]
@@ -1036,12 +813,9 @@ class BenchmarkRunner:
             try:
                 connections, docs = await self.client.graph_expand(query_text, query_id)
 
-                if self.config.record:
-                    self.fixture_store.save_graph_fixture(query_id, connections, docs)
-
                 # Translate artifact IDs to corpus paths
                 translated_docs = [
-                    self.fixture_store.translate_id(doc_id)
+                    self.id_store.translate_id(doc_id)
                     for doc_id in docs
                 ]
 
@@ -1091,15 +865,6 @@ class BenchmarkRunner:
                     'error': str(e)
                 })
 
-        # In strict mode, any error is a failure
-        if self.config.strict and errors:
-            return {
-                'per_query': results,
-                'aggregated': {},
-                'pass': False,
-                'errors': errors
-            }
-
         # Aggregate
         valid_results = [r for r in results if 'error' not in r]
 
@@ -1135,68 +900,8 @@ class BenchmarkRunner:
         """Run all benchmarks and generate report."""
         print(f"\n{'='*60}")
         print(f"V7 Quality Benchmark Suite")
-        print(f"Mode: {self.config.mode.upper()}")
-        print(f"Strict: {self.config.strict}")
+        print(f"Mode: LIVE")
         print(f"{'='*60}\n")
-
-        # In replay mode with strict, pre-check fixtures
-        if self.config.mode == 'replay' and self.config.strict:
-            print("Checking fixtures completeness...")
-            fixture_status = self.check_fixtures()
-
-            if not fixture_status['complete']:
-                print(f"\n{'='*60}")
-                print("FIXTURE CHECK FAILED")
-                print(f"{'='*60}")
-                print(f"\nEvents: {fixture_status['events_found']}/{fixture_status['events_total']}")
-                print(f"Entities: {fixture_status['entities_found']}/{fixture_status['entities_total']}")
-                print(f"Retrievals: {fixture_status['retrievals_found']}/{fixture_status['retrievals_total']}")
-                print(f"Graph: {fixture_status['graph_found']}/{fixture_status['graph_total']}")
-
-                if fixture_status['missing_events']:
-                    print(f"\nMissing event fixtures ({len(fixture_status['missing_events'])}):")
-                    for doc_id in fixture_status['missing_events'][:5]:
-                        print(f"  - {doc_id}")
-                    if len(fixture_status['missing_events']) > 5:
-                        print(f"  ... and {len(fixture_status['missing_events']) - 5} more")
-
-                if fixture_status['missing_entities']:
-                    print(f"\nMissing entity fixtures ({len(fixture_status['missing_entities'])}):")
-                    for doc_id in fixture_status['missing_entities'][:5]:
-                        print(f"  - {doc_id}")
-                    if len(fixture_status['missing_entities']) > 5:
-                        print(f"  ... and {len(fixture_status['missing_entities']) - 5} more")
-
-                if fixture_status['missing_retrievals']:
-                    print(f"\nMissing retrieval fixtures ({len(fixture_status['missing_retrievals'])}):")
-                    for query_id in fixture_status['missing_retrievals'][:5]:
-                        print(f"  - {query_id}")
-                    if len(fixture_status['missing_retrievals']) > 5:
-                        print(f"  ... and {len(fixture_status['missing_retrievals']) - 5} more")
-
-                if fixture_status['missing_graph']:
-                    print(f"\nMissing graph fixtures ({len(fixture_status['missing_graph'])}):")
-                    for query_id in fixture_status['missing_graph'][:5]:
-                        print(f"  - {query_id}")
-                    if len(fixture_status['missing_graph']) > 5:
-                        print(f"  ... and {len(fixture_status['missing_graph']) - 5} more")
-
-                print(f"\nRun with --record to create fixtures first.")
-                print(f"{'='*60}")
-
-                return {
-                    'timestamp': datetime.now().isoformat(),
-                    'mode': self.config.mode,
-                    'fixture_check': fixture_status,
-                    'overall_pass': False,
-                    'error': 'Missing fixtures for replay mode'
-                }
-
-            print(f"  Events: {fixture_status['events_found']}/{fixture_status['events_total']} OK")
-            print(f"  Entities: {fixture_status['entities_found']}/{fixture_status['entities_total']} OK")
-            print(f"  Retrievals: {fixture_status['retrievals_found']}/{fixture_status['retrievals_total']} OK")
-            print(f"  Graph: {fixture_status['graph_found']}/{fixture_status['graph_total']} OK")
-            print()
 
         events_truth, entities_truth, graph_truth = self.load_ground_truth()
         queries = self.load_queries()
@@ -1224,8 +929,7 @@ class BenchmarkRunner:
         # Build report
         report = {
             'timestamp': datetime.now().isoformat(),
-            'mode': self.config.mode,
-            'strict': self.config.strict,
+            'mode': 'live',
             'extraction': extraction_results,
             'entities': entity_results,
             'retrieval': retrieval_results,
@@ -1302,14 +1006,8 @@ class BenchmarkRunner:
 
 def main():
     parser = argparse.ArgumentParser(description='V7 Quality Benchmark Runner')
-    parser.add_argument('--mode', choices=['replay', 'live'], default='replay',
-                        help='Execution mode: replay (fixtures) or live (real services)')
     parser.add_argument('--record', action='store_true',
-                        help='Record new fixtures from live execution')
-    parser.add_argument('--check-fixtures', action='store_true',
-                        help='Only check if fixtures are complete, do not run benchmarks')
-    parser.add_argument('--no-strict', action='store_true',
-                        help='Allow partial results in replay mode (not recommended for CI)')
+                        help='Record ID mappings for retrieval evaluation')
     parser.add_argument('--min-extraction-f1', type=float, default=0.70,
                         help='Minimum extraction F1 threshold')
     parser.add_argument('--min-entity-f1', type=float, default=0.70,
@@ -1321,13 +1019,8 @@ def main():
 
     args = parser.parse_args()
 
-    if args.record:
-        args.mode = 'live'
-
     config = BenchmarkConfig(
-        mode=args.mode,
         record=args.record,
-        strict=not args.no_strict,
         min_extraction_f1=args.min_extraction_f1,
         min_entity_f1=args.min_entity_f1,
         min_retrieval_mrr=args.min_retrieval_mrr,
@@ -1335,39 +1028,6 @@ def main():
     )
 
     runner = BenchmarkRunner(config)
-
-    # Just check fixtures if requested
-    if args.check_fixtures:
-        status = runner.check_fixtures()
-        print(f"\nFixture Status:")
-        print(f"  Events: {status['events_found']}/{status['events_total']}")
-        print(f"  Entities: {status['entities_found']}/{status['entities_total']}")
-        print(f"  Retrievals: {status['retrievals_found']}/{status['retrievals_total']}")
-        print(f"  Graph: {status['graph_found']}/{status['graph_total']}")
-        print(f"  Complete: {'OK' if status['complete'] else 'INCOMPLETE'}")
-
-        if status['missing_events']:
-            print(f"\nMissing event fixtures:")
-            for doc_id in status['missing_events']:
-                print(f"  - {doc_id}")
-
-        if status['missing_entities']:
-            print(f"\nMissing entity fixtures:")
-            for doc_id in status['missing_entities']:
-                print(f"  - {doc_id}")
-
-        if status['missing_retrievals']:
-            print(f"\nMissing retrieval fixtures:")
-            for query_id in status['missing_retrievals']:
-                print(f"  - {query_id}")
-
-        if status['missing_graph']:
-            print(f"\nMissing graph fixtures:")
-            for query_id in status['missing_graph']:
-                print(f"  - {query_id}")
-
-        sys.exit(0 if status['complete'] else 1)
-
     report = asyncio.run(runner.run())
 
     # Exit with appropriate code for CI

@@ -449,6 +449,9 @@ async def recall(
     graph_filters: Optional[List[str]] = None,
     include_entities: bool = True,
     expand_neighbors: bool = False,
+    # V9: Edge parameters
+    edge_types: Optional[List[str]] = None,
+    include_edges: bool = False,
     # Filtering
     min_importance: float = 0.0,
     source: Optional[str] = None,
@@ -474,6 +477,8 @@ async def recall(
         graph_filters: Event categories for graph expansion
         include_entities: Include entity information in response
         expand_neighbors: Include +/-1 adjacent chunks for context
+        edge_types: Filter graph expansion by relationship types (e.g., ["MANAGES", "DECIDED"])
+        include_edges: Include edge/relationship details in response
         min_importance: Minimum importance threshold (0.0-1.0)
         source: Filter by source system
         sensitivity: Filter by sensitivity level
@@ -483,6 +488,7 @@ async def recall(
             results: [...],           # Primary matches
             related: [...],           # Graph-expanded context
             entities: [...],          # People/things mentioned
+            edges: [...],             # Relationships (if include_edges=True)
             total_count: int
         }
 
@@ -631,12 +637,19 @@ async def recall(
                 graph_filters = ["Decision", "Commitment", "QualityRisk"]
 
             # V6: Use hybrid_search_v5 which searches V6 content collection
+            # Build graph filters dict
+            gf = {}
+            if graph_filters:
+                gf["categories"] = graph_filters
+            if edge_types:
+                gf["edge_types"] = edge_types
+
             v5_result = await retrieval_service.hybrid_search_v5(
                 query=query,
                 limit=limit,
                 expand=expand,
                 graph_budget=graph_budget,
-                graph_filters={"categories": graph_filters} if graph_filters else None,
+                graph_filters=gf if gf else None,
                 include_entities=include_entities,
                 context_filter=context,
                 min_importance=min_importance,
@@ -677,12 +690,78 @@ async def recall(
                     "evidence": ev.get("evidence", [])
                 })
 
-            return {
+            # V9: Fetch edges if requested
+            edges = []
+            if include_edges and pg_client:
+                try:
+                    # Get entity IDs from results
+                    entity_ids = []
+                    for ent in v4_dict.get("entities", []):
+                        if ent.get("entity_id"):
+                            entity_ids.append(ent["entity_id"])
+
+                    if entity_ids:
+                        # Build edge type filter
+                        edge_type_clause = ""
+                        params = entity_ids + entity_ids  # For source and target
+                        if edge_types:
+                            placeholders = ", ".join(f"${i}" for i in range(len(entity_ids) * 2 + 1, len(entity_ids) * 2 + 1 + len(edge_types)))
+                            edge_type_clause = f"AND ee.relationship_type IN ({placeholders})"
+                            params = params + edge_types
+
+                        source_placeholders = ", ".join(f"${i}" for i in range(1, len(entity_ids) + 1))
+                        target_placeholders = ", ".join(f"${i}" for i in range(len(entity_ids) + 1, len(entity_ids) * 2 + 1))
+
+                        edge_rows = await pg_client.fetch_all(
+                            f"""
+                            SELECT
+                                ee.edge_id,
+                                ee.relationship_type,
+                                ee.relationship_name,
+                                ee.confidence,
+                                ee.evidence_quote,
+                                e1.canonical_name AS source_name,
+                                e1.entity_type AS source_type,
+                                e2.canonical_name AS target_name,
+                                e2.entity_type AS target_type
+                            FROM entity_edge ee
+                            JOIN entity e1 ON e1.entity_id = ee.source_entity_id
+                            JOIN entity e2 ON e2.entity_id = ee.target_entity_id
+                            WHERE (ee.source_entity_id IN ({source_placeholders})
+                                   OR ee.target_entity_id IN ({target_placeholders}))
+                            {edge_type_clause}
+                            ORDER BY ee.confidence DESC
+                            LIMIT 50
+                            """,
+                            *params
+                        )
+
+                        for row in edge_rows:
+                            edges.append({
+                                "edge_id": str(row["edge_id"]),
+                                "source": row["source_name"],
+                                "source_type": row["source_type"],
+                                "target": row["target_name"],
+                                "target_type": row["target_type"],
+                                "type": row["relationship_type"],
+                                "name": row["relationship_name"],
+                                "confidence": float(row["confidence"]) if row["confidence"] else None,
+                                "evidence": row["evidence_quote"]
+                            })
+                except Exception as e:
+                    logger.warning(f"V9 recall: Failed to fetch edges: {e}")
+
+            result = {
                 "results": primary_results,
                 "related": v4_dict.get("related_context", []) if expand else [],
                 "entities": v4_dict.get("entities", []) if include_entities else [],
                 "total_count": len(primary_results)
             }
+
+            if include_edges:
+                result["edges"] = edges
+
+            return result
 
         # No query, id, or conversation_id - return error
         return {"error": "Must provide query, id, or conversation_id"}

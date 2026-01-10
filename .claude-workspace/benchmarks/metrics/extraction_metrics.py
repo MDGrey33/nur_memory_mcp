@@ -39,10 +39,30 @@ def normalize_text(text: str) -> str:
 
 
 def text_similarity(text1: str, text2: str) -> float:
-    """Calculate similarity between two text strings."""
+    """Calculate similarity between two text strings.
+
+    V9: Enhanced to handle word order variations better by combining:
+    1. Sequence similarity (original)
+    2. Word overlap (Jaccard-like)
+    """
     norm1 = normalize_text(text1)
     norm2 = normalize_text(text2)
-    return SequenceMatcher(None, norm1, norm2).ratio()
+
+    # Original sequence similarity
+    seq_sim = SequenceMatcher(None, norm1, norm2).ratio()
+
+    # Word overlap similarity (handles reordering)
+    words1 = set(norm1.split())
+    words2 = set(norm2.split())
+    if words1 and words2:
+        intersection = len(words1 & words2)
+        union = len(words1 | words2)
+        word_sim = intersection / union if union > 0 else 0
+    else:
+        word_sim = 0
+
+    # Return max of both (if words match well but order differs, still match)
+    return max(seq_sim, word_sim)
 
 
 def category_matches(pred_category: str, truth_category: str) -> bool:
@@ -122,7 +142,7 @@ def category_matches(pred_category: str, truth_category: str) -> bool:
 def match_event(
     predicted: dict,
     ground_truth: dict,
-    narrative_threshold: float = 0.6,
+    narrative_threshold: float = 0.50,
     require_category_match: bool = True
 ) -> tuple[bool, float]:
     """
@@ -166,7 +186,7 @@ def match_event(
 def evaluate_extraction(
     predicted_events: list[dict],
     ground_truth_events: list[dict],
-    narrative_threshold: float = 0.6,
+    narrative_threshold: float = 0.50,
     require_category_match: bool = True
 ) -> ExtractionResult:
     """

@@ -379,7 +379,8 @@ class RetrievalService:
         seed_event_ids: Optional[List[UUID]] = None,
         query_embedding: Optional[List[float]] = None,
         use_triplet_scoring: bool = True,
-        candidate_artifact_uids: Optional[List[str]] = None
+        candidate_artifact_uids: Optional[List[str]] = None,
+        edge_types: Optional[List[str]] = None  # V9: Filter by relationship type
     ) -> Tuple[List[RelatedContextItem], List[EntityInfo]]:
         """
         Perform graph expansion from primary results.
@@ -421,7 +422,8 @@ class RetrievalService:
                 seed_event_ids=seed_event_ids,
                 budget=fetch_budget,
                 category_filter=category_filter,
-                candidate_artifact_uids=candidate_artifact_uids  # V7.3: Two-phase filter
+                candidate_artifact_uids=candidate_artifact_uids,  # V7.3: Two-phase filter
+                edge_types=edge_types  # V9: Edge type filter
             )
 
             # Step 2.5: V7.3 Triplet scoring - re-rank events by semantic relevance
@@ -661,6 +663,7 @@ class RetrievalService:
 
                 if seed_event_ids:
                     category_filter = graph_filters.get("categories") if graph_filters else None
+                    edge_type_filter = graph_filters.get("edge_types") if graph_filters else None  # V9
                     related_context, entities = await self._perform_graph_expansion(
                         primary_results=seed_results,
                         depth=1,
@@ -670,7 +673,8 @@ class RetrievalService:
                         seed_event_ids=seed_event_ids,
                         query_embedding=query_embedding,  # V7.3: Pass for triplet scoring
                         use_triplet_scoring=False,  # V7.3: Disabled - 2.4x latency increase
-                        candidate_artifact_uids=candidate_artifact_uids if candidate_artifact_uids else None
+                        candidate_artifact_uids=candidate_artifact_uids if candidate_artifact_uids else None,
+                        edge_types=edge_type_filter  # V9: Edge type filter
                     )
 
             return V4SearchResult(
@@ -795,19 +799,22 @@ class RetrievalService:
         seed_event_ids: List[UUID],
         budget: int = 10,
         category_filter: Optional[List[str]] = None,
-        candidate_artifact_uids: Optional[List[str]] = None
+        candidate_artifact_uids: Optional[List[str]] = None,
+        edge_types: Optional[List[str]] = None  # V9: Filter by relationship type
     ) -> List[Dict[str, Any]]:
         """
         Find related events via shared actors/subjects using pure SQL joins.
 
         V6 graph expansion via SQL (no AGE dependency).
         V7.3: Added candidate_artifact_uids for two-phase retrieval optimization.
+        V9: Added edge_types for relationship filtering.
 
         Args:
             seed_event_ids: Event IDs to expand from
             budget: Maximum related events to return
             category_filter: Event categories to include (e.g., ["Decision", "Commitment"])
             candidate_artifact_uids: V7.3 two-phase filter - only return events from these artifacts
+            edge_types: V9 filter - only expand via these relationship types (e.g., ["MANAGES", "DECIDED"])
 
         Returns:
             List of related event dicts with reason for connection
@@ -836,7 +843,17 @@ class RetrievalService:
             art_placeholders = ", ".join(f"${param_offset+i+1}" for i in range(len(candidate_artifact_uids)))
             artifact_clause = f"AND se.artifact_uid IN ({art_placeholders})"
             params.extend(candidate_artifact_uids)
+            param_offset += len(candidate_artifact_uids)
             logger.info(f"Two-phase filter: restricting to {len(candidate_artifact_uids)} candidate artifacts")
+
+        # V9: Edge type filter
+        edge_type_clause = ""
+        if edge_types:
+            edge_placeholders = ", ".join(f"${param_offset+i+1}" for i in range(len(edge_types)))
+            edge_type_clause = f"AND ee.relationship_type IN ({edge_placeholders})"
+            params.extend(edge_types)
+            param_offset += len(edge_types)
+            logger.info(f"Edge type filter: restricting to {edge_types}")
 
         sql = f"""
         WITH seed_entities AS (
@@ -850,18 +867,21 @@ class RetrievalService:
             WHERE event_id IN ({seed_placeholders})
         ),
         -- V8: Get entities connected via explicit edges
+        -- V9: With optional edge type filtering
         edge_connected_entities AS (
             SELECT DISTINCT
                 ee.target_entity_id AS entity_id,
                 ee.relationship_type
             FROM entity_edge ee
             JOIN seed_entities s ON s.entity_id = ee.source_entity_id
+            WHERE 1=1 {edge_type_clause}
             UNION
             SELECT DISTINCT
                 ee.source_entity_id AS entity_id,
                 ee.relationship_type
             FROM entity_edge ee
             JOIN seed_entities s ON s.entity_id = ee.target_entity_id
+            WHERE 1=1 {edge_type_clause}
         ),
         -- All connected entities (direct from events + via edges)
         all_connected_entities AS (
