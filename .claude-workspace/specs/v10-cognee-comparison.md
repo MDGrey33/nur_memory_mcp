@@ -158,10 +158,37 @@ await cognee.prune.prune_system(metadata=True)
 | Aspect | Our System | Cognee |
 |--------|-----------|--------|
 | **Data Model** | Semantic events (category, actors, subject) | Triplets (source-relation-object) |
-| **IDs** | `art_xxx` deterministic hash | Document titles |
+| **IDs** | `art_xxx` stored in ChromaDB | No custom IDs - we track ourselves |
 | **Deletion** | Granular per-document | Global prune only |
-| **Search Result** | JSON with structured fields | Varies by SearchType |
+| **Search Result** | JSON with our IDs | Chunks with document_title |
 | **Entities** | Extracted from event actors/subjects | Graph nodes |
+
+### ID Mapping Strategy
+
+**The Problem:** Our benchmark needs `art_xxx` IDs to map results back to corpus paths. ChromaDB stores our custom IDs. Cognee doesn't support custom IDs.
+
+**The Solution:** Generate IDs the same way, track mapping ourselves, match chunks via substring:
+
+```python
+# Our server (ChromaDB stores the ID):
+content_hash = hashlib.sha256(content.encode()).hexdigest()[:12]
+artifact_id = f"art_{content_hash}"
+collection.add(ids=[artifact_id], documents=[content])  # ID stored in DB
+
+# Cognee wrapper (we track the ID ourselves):
+content_hash = hashlib.sha256(content.encode()).hexdigest()[:12]
+artifact_id = f"art_{content_hash}"
+cognee.add(content)  # No ID support
+self._id_to_content[artifact_id] = content  # Track ourselves
+
+# On search, match chunks back to documents:
+for chunk in cognee.search(query):
+    for art_id, full_content in self._id_to_content.items():
+        if chunk.text in full_content:
+            return art_id  # Found the source document
+```
+
+This makes the benchmark work identically - it doesn't know whether IDs come from the database or our tracking layer.
 
 ### Comparison Implications
 
@@ -208,16 +235,15 @@ python-dotenv>=1.0.0
 MCP Cognee Server - Wraps Cognee library with MCP interface.
 
 Exposes same tools as our MCP Memory Server for A/B comparison.
+Uses same ID generation (art_ + SHA256[:12]) for benchmark compatibility.
 """
 
 import os
-import asyncio
 from datetime import datetime
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
 from cognee_adapter import CogneeAdapter
-from response_normalizer import normalize_search_results
 
 load_dotenv()
 
@@ -225,63 +251,46 @@ load_dotenv()
 mcp = FastMCP("Cognee Memory")
 adapter = CogneeAdapter()
 
-# Track stored content for forget functionality
-content_registry: dict[str, dict] = {}
-
 
 @mcp.tool()
 async def remember(
     content: str,
     context: str = None,
-    metadata: dict = None
+    source: str = None,
+    importance: float = 0.5,
+    title: str = None,
+    author: str = None,
+    participants: list[str] = None,
+    date: str = None
 ) -> dict:
     """
     Store content in Cognee with knowledge extraction.
 
-    Args:
-        content: The text content to store
-        context: Optional context hint (meeting, email, etc.)
-        metadata: Optional metadata dict
-
-    Returns:
-        dict with id, status, extraction summary
+    Args match our MCP server's remember() signature.
     """
     start = datetime.now()
 
     try:
-        # Generate content ID
-        content_id = adapter.generate_id(content)
+        # Add to Cognee and get our art_xxx ID
+        # Adapter generates ID same way as our server: art_ + SHA256[:12]
+        result = await adapter.add(content)
+        art_id = result["id"]
 
-        # Build metadata
-        full_metadata = {
-            "context": context,
-            "stored_at": datetime.utcnow().isoformat(),
-            **(metadata or {})
-        }
-
-        # Add to Cognee
-        await adapter.add(content, metadata=full_metadata)
-
-        # Run extraction (cognify)
-        extraction_result = await adapter.cognify()
-
-        # Track in registry
-        content_registry[content_id] = {
-            "content": content[:100],
-            "metadata": full_metadata,
-            "stored_at": datetime.utcnow().isoformat()
-        }
+        # Run extraction (cognify builds knowledge graph)
+        await adapter.cognify()
 
         elapsed = (datetime.now() - start).total_seconds() * 1000
 
+        # Return same format as our server
+        # Note: Cognee extraction is async internally, we wait for cognify()
         return {
-            "id": content_id,
+            "id": art_id,
             "status": "stored",
-            "extraction": {
-                "nodes_created": extraction_result.get("nodes", 0),
-                "edges_created": extraction_result.get("edges", 0)
-            },
-            "processing_time_ms": round(elapsed, 2)
+            "context": context,
+            "processing_time_ms": round(elapsed, 2),
+            # Match our server's response format
+            "summary": f"Stored content ({context or 'document'})",
+            "events_queued": False  # Cognee processes synchronously in cognify()
         }
 
     except Exception as e:
@@ -305,47 +314,52 @@ async def recall(
 
     Args:
         query: Natural language search query
-        id: Direct lookup by ID (not well supported by Cognee)
+        id: Direct lookup by ID
         limit: Maximum results to return
-        include_events: Include extracted events (mapped from triplets)
+        include_events: Include extracted events (always empty for Cognee)
         include_entities: Include extracted entities
-        expand: Use graph expansion (GRAPH_COMPLETION vs CHUNKS)
+        expand: Use graph expansion
 
     Returns:
-        dict with results, events (empty - see note), entities
+        dict with results in same format as our MCP server
     """
     start = datetime.now()
 
     try:
-        # Search Cognee using CHUNKS for retrieval benchmarks
-        # CHUNKS returns document chunks with titles (comparable to our retrieval)
-        chunk_results = await adapter.search_chunks(query or "", limit=limit)
+        # Direct ID lookup
+        if id and not query:
+            # Check if we have this ID tracked
+            if id in adapter._id_to_content:
+                content = adapter._id_to_content[id]
+                return {
+                    "results": [{
+                        "id": id,
+                        "content": content,
+                        "events": []  # Cognee doesn't extract events
+                    }],
+                    "events": [],
+                    "entities": [],
+                    "related": []
+                }
+            else:
+                return {"results": [], "error": f"ID {id} not found"}
 
-        # Build results in our format
-        results = []
-        for chunk in chunk_results:
-            results.append({
-                "id": chunk["id"],
-                "content": chunk["text"],
-                "metadata": chunk["metadata"],
-                # Note: Cognee doesn't return similarity scores in CHUNKS mode
-                "similarity": 0.0
-            })
+        # Search query - use our mapping function
+        results = await adapter.search_and_map_ids(query or "", limit=limit)
 
         elapsed = (datetime.now() - start).total_seconds() * 1000
 
         # NOTE: Cognee doesn't extract "events" like we do
         # It extracts triplets (subject-relation-object) which are different
-        # We return empty events for benchmark compatibility
+        # Extraction F1 will be 0 - this is expected, not a bug
         return {
             "results": results[:limit],
             "events": [],  # Cognee uses triplets, not events
-            "entities": [],  # Would need separate graph query
+            "entities": [],
             "related": [],
             "stats": {
                 "total_results": len(results),
-                "query_time_ms": round(elapsed, 2),
-                "note": "Cognee extracts triplets not events - event metrics not comparable"
+                "query_time_ms": round(elapsed, 2)
             }
         }
 
@@ -357,35 +371,42 @@ async def recall(
 
 
 @mcp.tool()
-async def forget(content_id: str) -> dict:
+async def forget(id: str, confirm: bool = False) -> dict:
     """
     Remove content from Cognee.
 
-    Note: Cognee doesn't support granular deletion well.
-    This is a best-effort implementation.
+    Note: Cognee only supports global prune, not granular deletion.
+    This removes from our tracking but content may still be in Cognee.
 
     Args:
-        content_id: ID of content to remove
+        id: ID of content to remove (art_xxx format)
+        confirm: Safety flag (must be True to delete)
 
     Returns:
         dict with status
     """
+    if not confirm:
+        return {
+            "status": "error",
+            "error": "Must set confirm=True to delete"
+        }
+
     try:
         # Check if we know about this content
-        if content_id not in content_registry:
+        if id not in adapter._id_to_content:
             return {
                 "status": "not_found",
-                "message": f"Content {content_id} not found in registry"
+                "message": f"Content {id} not found"
             }
 
-        # Cognee doesn't have granular delete - note this limitation
-        # For fair comparison, we just mark as deleted in registry
-        del content_registry[content_id]
+        # Remove from our tracking
+        # Note: Cognee doesn't support granular delete
+        del adapter._id_to_content[id]
 
         return {
             "status": "deleted",
-            "id": content_id,
-            "note": "Cognee lacks granular deletion - content may still appear in search"
+            "id": id,
+            "note": "Removed from tracking. Cognee lacks granular deletion - may still appear in search."
         }
 
     except Exception as e:
@@ -396,33 +417,43 @@ async def forget(content_id: str) -> dict:
 
 
 @mcp.tool()
-async def status() -> dict:
+async def status(artifact_id: str = None) -> dict:
     """
     Get Cognee server status and statistics.
+
+    Args:
+        artifact_id: Optional - check status of specific document
 
     Returns:
         dict with health info and stats
     """
     try:
-        # Get Cognee stats
         cognee_status = await adapter.get_status()
 
-        return {
+        result = {
             "status": "healthy",
             "server": "cognee-mcp",
             "version": "10.0.0",
             "cognee_version": cognee_status.get("version", "unknown"),
             "storage": {
-                "tracked_content": len(content_registry),
-                "cognee_nodes": cognee_status.get("nodes", 0),
-                "cognee_edges": cognee_status.get("edges", 0)
-            },
-            "capabilities": {
-                "granular_delete": False,  # Cognee limitation
-                "temporal_search": True,
-                "graph_traversal": True
+                "tracked_documents": cognee_status.get("tracked_documents", 0)
             }
         }
+
+        # If checking specific artifact, report its status
+        if artifact_id:
+            if artifact_id in adapter._id_to_content:
+                result["job_status"] = {
+                    "status": "COMPLETED",  # Cognee processes synchronously
+                    "artifact_id": artifact_id
+                }
+            else:
+                result["job_status"] = {
+                    "status": "NOT_FOUND",
+                    "artifact_id": artifact_id
+                }
+
+        return result
 
     except Exception as e:
         return {
@@ -449,23 +480,36 @@ Adapter layer for Cognee API.
 
 Handles Cognee initialization, configuration, and API calls.
 Verified against Cognee 0.1.x API (Jan 2026).
+
+Key design: We track ID→content mapping ourselves since Cognee doesn't
+support custom document IDs. We match returned chunks back to source
+documents via substring matching.
 """
 
 import os
 import hashlib
-from typing import Optional, List
+from typing import List
 import cognee
 from cognee.api.v1.search import SearchType
 
 
 class CogneeAdapter:
-    """Wraps Cognee API with consistent interface."""
+    """
+    Wraps Cognee API with consistent interface.
+
+    Maintains ID mapping internally since Cognee doesn't support custom IDs.
+    Uses same ID generation as our MCP server: art_ + SHA256(content)[:12]
+    """
 
     def __init__(self):
         self._initialized = False
         self._dataset = "mcp_memory"
-        # Track content -> title mapping for ID translation
-        self._content_registry: dict[str, dict] = {}
+
+        # Track our ID mappings (same approach as our ChromaDB storage)
+        # Key difference: ChromaDB stores our IDs, Cognee doesn't
+        # So we maintain the mapping and match chunks via substring
+        self._id_to_content: dict[str, str] = {}  # art_xxx -> full content
+        self._content_hash_to_id: dict[str, str] = {}  # hash -> art_xxx
 
     async def _ensure_initialized(self):
         """Initialize Cognee on first use."""
@@ -480,32 +524,37 @@ class CogneeAdapter:
         self._initialized = True
 
     def generate_id(self, content: str) -> str:
-        """Generate deterministic ID for content (matches our art_xxx format)."""
-        hash_val = hashlib.sha256(content.encode()).hexdigest()[:12]
-        return f"art_{hash_val}"
+        """
+        Generate deterministic ID for content.
 
-    async def add(self, content: str, title: str = None, metadata: dict = None) -> dict:
-        """Add content to Cognee."""
+        MUST match our server's ID generation exactly:
+        art_ + SHA256(content)[:12]
+
+        See: mcp-server/src/server.py line 220-222
+        """
+        content_hash = hashlib.sha256(content.encode()).hexdigest()[:12]
+        return f"art_{content_hash}"
+
+    async def add(self, content: str) -> dict:
+        """
+        Add content to Cognee and track the ID mapping.
+
+        Returns the same art_xxx ID that our server would generate.
+        """
         await self._ensure_initialized()
 
-        # Generate title for tracking (Cognee uses document titles as IDs)
-        if not title:
-            title = f"doc_{self.generate_id(content)}"
+        # Generate ID exactly like our server does
+        art_id = self.generate_id(content)
+        content_hash = hashlib.sha256(content.encode()).hexdigest()[:12]
 
-        # Cognee.add() accepts text or list of texts
-        await cognee.add(
-            content,
-            dataset_name=self._dataset
-        )
+        # Store in Cognee (no custom ID support)
+        await cognee.add(content, dataset_name=self._dataset)
 
-        # Track for ID translation
-        content_id = self.generate_id(content)
-        self._content_registry[content_id] = {
-            "title": title,
-            "content_preview": content[:100]
-        }
+        # Track mapping ourselves
+        self._id_to_content[art_id] = content
+        self._content_hash_to_id[content_hash] = art_id
 
-        return {"status": "added", "title": title}
+        return {"status": "added", "id": art_id}
 
     async def cognify(self) -> dict:
         """Run Cognee extraction pipeline (builds knowledge graph)."""
@@ -514,11 +563,9 @@ class CogneeAdapter:
         # This builds the knowledge graph with triplets
         await cognee.cognify()
 
-        # Cognify doesn't return stats directly
         return {
             "status": "processed",
-            "nodes": 0,  # Stats not directly available
-            "edges": 0
+            "documents_tracked": len(self._id_to_content)
         }
 
     async def search(
@@ -527,7 +574,7 @@ class CogneeAdapter:
         limit: int = 10,
         search_type: SearchType = SearchType.CHUNKS
     ) -> list:
-        """Search Cognee - returns list of chunk objects."""
+        """Search Cognee - returns raw results."""
         await self._ensure_initialized()
 
         results = await cognee.search(
@@ -539,58 +586,67 @@ class CogneeAdapter:
 
         return list(results) if results else []
 
-    async def search_chunks(self, query: str, limit: int = 10) -> List[dict]:
+    async def search_and_map_ids(self, query: str, limit: int = 10) -> List[dict]:
         """
-        Search for document chunks - best for retrieval benchmarks.
+        Search Cognee and map results back to our art_xxx IDs.
 
-        Returns: List of dicts with {document_title, text, metadata}
+        This is the key function for benchmark compatibility.
+        Cognee returns chunks with text - we match them back to
+        source documents via substring matching.
         """
         results = await self.search(query, limit, SearchType.CHUNKS)
 
         normalized = []
+        seen_ids = set()  # Deduplicate by document ID
+
         for r in results:
-            # CHUNKS results have document_title, text, metadata
-            if hasattr(r, "document_title"):
-                normalized.append({
-                    "id": self._title_to_id(r.document_title),
-                    "document_title": r.document_title,
-                    "text": getattr(r, "text", ""),
-                    "metadata": getattr(r, "metadata", {})
-                })
+            # Extract chunk text from result
+            if hasattr(r, "text"):
+                chunk_text = r.text
             elif isinstance(r, dict):
-                title = r.get("document_title", "unknown")
+                chunk_text = r.get("text", "")
+            elif isinstance(r, str):
+                chunk_text = r
+            else:
+                continue
+
+            if not chunk_text:
+                continue
+
+            # Find which document this chunk belongs to
+            matched_id = self._match_chunk_to_document(chunk_text)
+
+            if matched_id and matched_id not in seen_ids:
+                seen_ids.add(matched_id)
                 normalized.append({
-                    "id": self._title_to_id(title),
-                    "document_title": title,
-                    "text": r.get("text", ""),
-                    "metadata": r.get("metadata", {})
+                    "id": matched_id,
+                    "content": chunk_text,
+                    "similarity": 0.0  # Cognee CHUNKS doesn't return scores
                 })
 
         return normalized
 
-    async def search_graph(self, query: str) -> str:
+    def _match_chunk_to_document(self, chunk_text: str) -> str | None:
         """
-        Search using graph completion - returns LLM-generated answer.
+        Match a chunk of text back to its source document ID.
 
-        GRAPH_COMPLETION returns text strings, not structured data.
+        Uses substring matching - the chunk should be contained
+        in one of the documents we stored.
         """
-        results = await self.search(query, limit=1, search_type=SearchType.GRAPH_COMPLETION)
+        chunk_text_clean = chunk_text.strip()
 
-        if results:
-            # GRAPH_COMPLETION returns answer strings
-            return str(results[0]) if results else ""
-        return ""
+        for art_id, full_content in self._id_to_content.items():
+            # Check if chunk is substring of original content
+            if chunk_text_clean in full_content:
+                return art_id
 
-    def _title_to_id(self, title: str) -> str:
-        """Convert document title to our art_xxx ID format."""
-        # Try to find in registry first
-        for content_id, data in self._content_registry.items():
-            if data.get("title") == title:
-                return content_id
+            # Also check with some flexibility (whitespace normalization)
+            chunk_normalized = ' '.join(chunk_text_clean.split())
+            content_normalized = ' '.join(full_content.split())
+            if chunk_normalized in content_normalized:
+                return art_id
 
-        # Generate from title if not found
-        hash_val = hashlib.sha256(title.encode()).hexdigest()[:12]
-        return f"art_{hash_val}"
+        return None
 
     async def get_status(self) -> dict:
         """Get Cognee status."""
@@ -599,16 +655,19 @@ class CogneeAdapter:
         return {
             "version": getattr(cognee, "__version__", "unknown"),
             "dataset": self._dataset,
-            "tracked_documents": len(self._content_registry)
+            "tracked_documents": len(self._id_to_content)
         }
 
     async def reset(self) -> dict:
-        """Reset Cognee data (global - affects all data)."""
+        """Reset Cognee data and our tracking."""
         await self._ensure_initialized()
 
         await cognee.prune.prune_data()
         await cognee.prune.prune_system(metadata=True)
-        self._content_registry.clear()
+
+        # Clear our tracking
+        self._id_to_content.clear()
+        self._content_hash_to_id.clear()
 
         return {"status": "reset"}
 ```
@@ -1081,6 +1140,7 @@ Review comparison results:
 
 | Date | Change |
 |------|--------|
-| 2026-01-14 | **Updated with verified Cognee API**: SearchType enum, CHUNKS response format, benchmark compatibility analysis |
+| 2026-01-14 | **Fixed ID mapping**: Track IDs ourselves, match chunks via substring (same approach as our ChromaDB ID storage) |
+| 2026-01-14 | Updated with verified Cognee API: SearchType enum, CHUNKS response format, benchmark compatibility analysis |
 | 2026-01-13 | Detailed implementation spec with code |
 | 2026-01-13 | Created initial V10 spec |
