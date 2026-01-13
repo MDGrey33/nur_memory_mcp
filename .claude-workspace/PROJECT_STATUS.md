@@ -252,12 +252,21 @@ MCP Memory Server is a Model Context Protocol server for persistent memory with 
 
 ### Long Term (Backlog)
 
-#### 7. V10 Planning
-**Potential features**:
-- Multi-tenant support
-- Streaming extraction
-- Real-time sync
-- UI dashboard
+#### 7. V10: Cognee Side-by-Side Comparison
+**Goal**: Implement parallel MCP server using Cognee under the hood, same interface, to benchmark against our implementation.
+
+**Spec**: `specs/v10-cognee-comparison.md`
+
+**Phases**:
+1. Cognee integration (1-2 days)
+2. Response normalization (1 day)
+3. Benchmark harness (1 day)
+4. Evaluation & decision (1-2 days)
+
+**Decision framework**:
+- If Cognee wins by >10%: Consider migrating
+- If we win by >10%: Continue custom development
+- If comparable: Choose based on maintenance burden
 
 ---
 

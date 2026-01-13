@@ -48,6 +48,7 @@
 | `specs/v9-consolidation.md` | **ACTIVE** | V9 release plan, current work |
 | `specs/v9-phase1-spec.md` | **ACTIVE** | Phase 1 extraction fix specification |
 | `specs/v9-phase1-investigation.md` | **ACTIVE** | Investigation findings |
+| `specs/v10-cognee-comparison.md` | **ACTIVE** | V10 Cognee side-by-side comparison plan |
 
 #### Reference Specs (Completed)
 | File | Status | Description |
