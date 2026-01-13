@@ -9,57 +9,58 @@
 
 ## Overview
 
-V9 consolidates all incomplete work from V7.3 through V8.1 into a single focused release. The primary goal is to fix the **extraction quality gap** (F1: 0.19 vs target 0.70) and complete the remaining API surface.
+V9 consolidates all incomplete work from V7.3 through V8.1 into a single focused release. The primary goal is to improve **extraction quality** (F1: 0.60 → 0.70) and complete the remaining API surface.
 
 ---
 
-## Current State (as of 2026-01-10)
+## Current State (as of 2026-01-11)
 
 ### What's Working
 | Component | Score | Target | Status |
 |-----------|-------|--------|--------|
-| Retrieval MRR | 0.81 | 0.60 | PASS |
-| Retrieval NDCG | 0.82 | 0.65 | PASS |
-| Two-Phase Retrieval | - | - | Implemented |
-| Dynamic Categories | - | - | Implemented |
-| Explicit Edges (V8) | - | - | Implemented |
+| Retrieval MRR | 0.81 | 0.60 | ✅ PASS |
+| Retrieval NDCG | 0.82 | 0.65 | ✅ PASS |
+| Two-Phase Retrieval | - | - | ✅ Implemented |
+| Dynamic Categories | - | - | ✅ Implemented |
+| Explicit Edges (V8) | - | - | ✅ Implemented |
+| `edge_types` param | V8 | - | ✅ Implemented |
+| `include_edges` param | V8 | - | ✅ Implemented |
+| Embedding Cache | V8.1 | - | ✅ Implemented |
 
-### What's Broken
+### What Needs Improvement
 | Component | Score | Target | Status |
 |-----------|-------|--------|--------|
-| Extraction F1 | **0.19** | 0.70 | CRITICAL |
-| Entity F1 | 0.57 | 0.70 | Needs work |
-| Graph Connection F1 | 0.53 | 0.60 | Close |
+| Extraction F1 | **0.60** | 0.70 | ⚠️ Close (was 0.19) |
+| Entity F1 | 0.58 | 0.70 | ⚠️ Needs work |
+| Graph Connection F1 | 0.48 | 0.60 | ⚠️ Needs work |
 
-### What's Incomplete
-| Item | Source | Description |
-|------|--------|-------------|
-| Triplet Scoring | V7.3 | Disabled (2.4x latency without embedding cache) |
-| Embedding Cache | V8.1 | Store embeddings in DB for events/entities |
-| `edge_types` param | V8 | Filter recall() by relationship type |
-| `include_edges` param | V8 | Return edge details in response |
+### Completed Items
+| Item | Source | Status |
+|------|--------|--------|
+| ✅ `edge_types` param | V8 | Implemented in recall() |
+| ✅ `include_edges` param | V8 | Implemented in recall() |
+| ✅ Embedding Cache | V8.1 | Caches embeddings for triplet scoring |
+| ✅ Benchmark fixes | V9 | Fixed for dynamic categories |
 
 ---
 
 ## V9 Roadmap
 
-### Phase 1: Extraction Quality Fix (Priority: CRITICAL)
+### Phase 1: Extraction Quality Improvement (Priority: HIGH)
 
-**Problem**: Extraction F1 is 0.19 - LLM extracts events but they don't match ground truth.
+**Current State**: Extraction F1 improved from 0.19 → 0.60 after benchmark fixes for dynamic categories.
 
-**Investigation Tasks**:
-1. Analyze benchmark mismatches - what's being extracted vs expected
-2. Check category alignment - are LLM categories matching ground truth labels?
-3. Review extraction prompt - is it producing parseable, consistent output?
-4. Check entity matching logic - are actors/subjects being matched correctly?
+**Completed**:
+- ✅ Fixed category matching to handle dynamic LLM-suggested categories
+- ✅ Normalized category comparison (case-insensitive, synonym mapping)
+- ✅ Updated benchmark to use fuzzy matching for event narratives
 
-**Potential Fixes**:
-- Normalize categories before comparison (case, synonyms)
-- Loosen matching criteria (semantic similarity vs exact match)
-- Update ground truth to match LLM's natural output
-- Tune extraction prompt for consistency
+**Remaining Gap** (0.60 → 0.70):
+- Conversations score lowest (F1: 0.31-0.67) - investigate extraction prompt
+- Entity extraction precision is low (0.44) - too many false positives
+- Consider tightening extraction prompt to reduce noise
 
-**Success Criteria**: Extraction F1 >= 0.50 (interim), >= 0.70 (target)
+**Success Criteria**: Extraction F1 >= 0.70 (target)
 
 ### Phase 2: API Completion
 

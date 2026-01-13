@@ -1,4 +1,4 @@
-# MCP Memory Server v7.0
+# MCP Memory Server v9.0
 
 A Model Context Protocol (MCP) server for persistent memory and context management with **semantic event extraction**, **graph-backed context expansion**, and **quality benchmarks**. Provides semantic search, artifact storage, and event + entity context packs.
 

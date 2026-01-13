@@ -1,6 +1,6 @@
 # MCP Memory Implementation Summary
 
-> **Current Version**: V6.2 (2026-01-01)
+> **Current Version**: V9 (2026-01-13)
 >
 > This document has historical V1 information. For current status see:
 > - **V6 Tools**: `remember`, `recall`, `forget`, `status`

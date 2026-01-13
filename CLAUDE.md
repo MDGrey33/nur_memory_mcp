@@ -162,22 +162,27 @@ V8 (current): SQL-based graph with explicit edges:
 
 **Consolidates**: V7.3 (triplet scoring), V8 (API completion), V8.1 (embedding cache)
 
-**Phases**:
-1. **Extraction Quality Fix** (CRITICAL) - F1 is 0.19, needs investigation
-2. **API Completion** - Add `edge_types` and `include_edges` params to recall()
-3. **Triplet Scoring** - Re-enable with embedding cache for acceptable latency
+**Completed**:
+- ✅ `edge_types` and `include_edges` params added to recall()
+- ✅ Embedding cache for triplet scoring
+- ✅ Benchmark fixes for dynamic categories
+
+**Remaining**:
+- Extraction quality improvements (F1: 0.60 → 0.70)
+- Entity resolution improvements (F1: 0.58 → 0.70)
+- Graph expansion improvements (F1: 0.48 → 0.60)
 
 **Spec**: `.claude-workspace/specs/v9-consolidation.md`
 
-### Current Benchmark Status (2026-01-10)
+### Current Benchmark Status (2026-01-11)
 
 | Component | Score | Target | Status |
 |-----------|-------|--------|--------|
-| Retrieval MRR | 0.81 | 0.60 | PASS |
-| Retrieval NDCG | 0.82 | 0.65 | PASS |
-| Graph Conn F1 | 0.51 | 0.60 | Close |
-| Entity F1 | 0.58 | 0.70 | Needs work |
-| Extraction F1 | 0.33 | 0.70 | Improved (was 0.19) |
+| Retrieval MRR | 0.81 | 0.60 | ✅ PASS |
+| Retrieval NDCG | 0.82 | 0.65 | ✅ PASS |
+| Extraction F1 | 0.60 | 0.70 | ⚠️ Close |
+| Entity F1 | 0.58 | 0.70 | ⚠️ Needs work |
+| Graph Conn F1 | 0.48 | 0.60 | ⚠️ Needs work |
 
 ## Claude Mind Development Workflow
 
@@ -237,4 +242,7 @@ Note: `type` field is required; trailing slash on URL is important.
 
 ### Architecture & Quality (read when designing or benchmarking)
 - **V7 Benchmarks Spec**: `.claude-workspace/specs/v7-quality-benchmarks.md` - Quality metrics details
-- **ADRs**: `.claude-workspace/architecture/` - Architecture Decision Records
+- **V9 Consolidation**: `.claude-workspace/specs/v9-consolidation.md` - Current release spec
+
+### Documentation Index
+- **DOCS.md**: `.claude-workspace/DOCS.md` - Full documentation index with categories (active/reference/archive)

@@ -1,8 +1,8 @@
-# MCP Memory Server v7.0 (HTTP Transport)
+# MCP Memory Server v9.0 (HTTP Transport)
 
 A persistent memory system for Claude using HTTP-based MCP transport with **semantic event extraction** and **graph-backed context expansion**.
 
-**Version**: 7.0.0 | **Status**: Production Ready
+**Version**: 9.0.0 | **Status**: Production Ready
 
 ## Port Configuration
 
