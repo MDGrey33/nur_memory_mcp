@@ -82,60 +82,96 @@ MCP_URL = os.getenv("MCP_URL", "http://localhost:3001")
 pip install cognee
 ```
 
-### Core API (from Cognee docs)
+### Core API (Verified from source/docs)
 
 ```python
 import cognee
+from cognee.api.v1.search import SearchType
+import os
 
-# Configure
-cognee.config.llm_api_key = "sk-..."
-cognee.config.set_llm_provider("openai")
+# Configure via environment variables
+os.environ["LLM_API_KEY"] = "sk-..."  # OpenAI key
 
 # Add content (like our remember)
 await cognee.add("text content", dataset_name="default")
 await cognee.add(["list", "of", "texts"], dataset_name="default")
 
-# Process/extract (builds knowledge graph)
+# Process/extract (builds knowledge graph with triplets)
 await cognee.cognify()
+
+# Optionally apply memory algorithms
+await cognee.memify()
 
 # Search (like our recall)
 results = await cognee.search(
-    query_type="INSIGHTS",  # or "CHUNKS", "GRAPH_COMPLETION"
+    query_type=SearchType.CHUNKS,  # or GRAPH_COMPLETION, SUMMARIES, etc.
     query_text="search query",
-    datasets=["default"]
+    datasets=["default"],
+    top_k=10
 )
 
-# Reset (like our forget - but global)
+# Reset (like our forget - but global only)
 await cognee.prune.prune_data()
 await cognee.prune.prune_system(metadata=True)
 ```
 
-### Cognee Search Types
+### Cognee Search Types (from SearchType enum)
 
 | Type | Description | Maps To |
 |------|-------------|---------|
-| `INSIGHTS` | High-level knowledge answers | Our default recall |
-| `CHUNKS` | Raw text chunks | Our `include_content=True` |
-| `GRAPH_COMPLETION` | Graph traversal results | Our graph expansion |
-| `SUMMARIES` | Document summaries | N/A |
+| `GRAPH_COMPLETION` | LLM Q&A using full graph context (default) | Our default recall with graph expansion |
+| `RAG_COMPLETION` | Traditional RAG | Our basic semantic search |
+| `CHUNKS` | Raw text chunk retrieval | Direct document retrieval |
+| `SUMMARIES` | Pre-computed summaries | N/A |
+| `CODE` | Syntax-aware code search | N/A |
+| `CYPHER` | Direct graph queries | N/A |
+| `CHUNKS_LEXICAL` | Token-based exact matching | N/A |
 
-### Cognee Response Format
+### Cognee Response Formats (by type)
 
+**CHUNKS results:**
 ```python
-# cognee.search() returns list of results
-[
-    {
-        "id": "...",
-        "text": "...",           # Content
-        "score": 0.85,           # Similarity
-        "metadata": {...},
-        # For graph results:
-        "source_node": {...},
-        "target_node": {...},
-        "relationship": "..."
-    }
-]
+# Each result has:
+{
+    "document_title": "source_doc.txt",  # Source document name
+    "metadata": {"page": 1, "section": "intro"},  # Optional metadata
+    "text": "The actual paragraph content..."  # Chunk text
+}
 ```
+
+**SUMMARIES results:**
+```python
+{
+    "title": "Document Title",
+    "text": "Pre-generated summary of the document..."
+}
+```
+
+**GRAPH_COMPLETION results:**
+```python
+# Returns LLM-generated answer strings based on graph context
+"Cognee is a library that turns documents into AI memory..."
+```
+
+### Key Differences from Our System
+
+| Aspect | Our System | Cognee |
+|--------|-----------|--------|
+| **Data Model** | Semantic events (category, actors, subject) | Triplets (source-relation-object) |
+| **IDs** | `art_xxx` deterministic hash | Document titles |
+| **Deletion** | Granular per-document | Global prune only |
+| **Search Result** | JSON with structured fields | Varies by SearchType |
+| **Entities** | Extracted from event actors/subjects | Graph nodes |
+
+### Comparison Implications
+
+**Comparable metrics:**
+- **Retrieval MRR/NDCG** - Both systems can rank documents by relevance
+
+**Not directly comparable:**
+- **Extraction F1** - We extract events, Cognee extracts triplets (different structure)
+- **Entity F1** - Different extraction approaches
+- **Graph F1** - Different graph models
 
 ---
 
@@ -257,67 +293,59 @@ async def remember(
 
 @mcp.tool()
 async def recall(
-    query: str,
+    query: str = None,
+    id: str = None,
     limit: int = 10,
-    min_similarity: float = 0.0,
     include_events: bool = True,
     include_entities: bool = True,
-    edge_types: list[str] = None,
-    include_edges: bool = False
+    expand: bool = True
 ) -> dict:
     """
     Search Cognee for relevant content.
 
     Args:
         query: Natural language search query
+        id: Direct lookup by ID (not well supported by Cognee)
         limit: Maximum results to return
-        min_similarity: Minimum similarity threshold (0.0-1.0)
-        include_events: Include extracted events
+        include_events: Include extracted events (mapped from triplets)
         include_entities: Include extracted entities
-        edge_types: Filter by relationship types
-        include_edges: Include relationship details
+        expand: Use graph expansion (GRAPH_COMPLETION vs CHUNKS)
 
     Returns:
-        dict with results, events, entities, edges
+        dict with results, events (empty - see note), entities
     """
     start = datetime.now()
 
     try:
-        # Search Cognee
-        raw_results = await adapter.search(
-            query=query,
-            limit=limit,
-            search_type="INSIGHTS"  # Use graph-aware search
-        )
+        # Search Cognee using CHUNKS for retrieval benchmarks
+        # CHUNKS returns document chunks with titles (comparable to our retrieval)
+        chunk_results = await adapter.search_chunks(query or "", limit=limit)
 
-        # Get graph data if requested
-        graph_data = None
-        if include_entities or include_edges:
-            graph_data = await adapter.get_graph_context(
-                query=query,
-                edge_types=edge_types
-            )
-
-        # Normalize to our response format
-        normalized = normalize_search_results(
-            raw_results=raw_results,
-            graph_data=graph_data,
-            min_similarity=min_similarity,
-            include_events=include_events,
-            include_entities=include_entities,
-            include_edges=include_edges
-        )
+        # Build results in our format
+        results = []
+        for chunk in chunk_results:
+            results.append({
+                "id": chunk["id"],
+                "content": chunk["text"],
+                "metadata": chunk["metadata"],
+                # Note: Cognee doesn't return similarity scores in CHUNKS mode
+                "similarity": 0.0
+            })
 
         elapsed = (datetime.now() - start).total_seconds() * 1000
 
+        # NOTE: Cognee doesn't extract "events" like we do
+        # It extracts triplets (subject-relation-object) which are different
+        # We return empty events for benchmark compatibility
         return {
-            "results": normalized["results"][:limit],
-            "events": normalized.get("events", []) if include_events else [],
-            "entities": normalized.get("entities", []) if include_entities else [],
-            "edges": normalized.get("edges", []) if include_edges else [],
+            "results": results[:limit],
+            "events": [],  # Cognee uses triplets, not events
+            "entities": [],  # Would need separate graph query
+            "related": [],
             "stats": {
-                "total_results": len(normalized["results"]),
-                "query_time_ms": round(elapsed, 2)
+                "total_results": len(results),
+                "query_time_ms": round(elapsed, 2),
+                "note": "Cognee extracts triplets not events - event metrics not comparable"
             }
         }
 
@@ -420,12 +448,14 @@ if __name__ == "__main__":
 Adapter layer for Cognee API.
 
 Handles Cognee initialization, configuration, and API calls.
+Verified against Cognee 0.1.x API (Jan 2026).
 """
 
 import os
 import hashlib
-from typing import Optional
+from typing import Optional, List
 import cognee
+from cognee.api.v1.search import SearchType
 
 
 class CogneeAdapter:
@@ -434,28 +464,33 @@ class CogneeAdapter:
     def __init__(self):
         self._initialized = False
         self._dataset = "mcp_memory"
+        # Track content -> title mapping for ID translation
+        self._content_registry: dict[str, dict] = {}
 
     async def _ensure_initialized(self):
         """Initialize Cognee on first use."""
         if self._initialized:
             return
 
-        # Configure Cognee
-        cognee.config.llm_api_key = os.getenv("OPENAI_API_KEY")
-        cognee.config.set_llm_provider("openai")
-
-        # Use SQLite for simplicity (can switch to Postgres)
-        # cognee.config.set_vector_db_provider("lancedb")
+        # Cognee uses environment variables for config
+        # LLM_API_KEY is used by Cognee for OpenAI
+        if not os.getenv("LLM_API_KEY"):
+            os.environ["LLM_API_KEY"] = os.getenv("OPENAI_API_KEY", "")
 
         self._initialized = True
 
     def generate_id(self, content: str) -> str:
-        """Generate deterministic ID for content."""
-        return hashlib.sha256(content.encode()).hexdigest()[:16]
+        """Generate deterministic ID for content (matches our art_xxx format)."""
+        hash_val = hashlib.sha256(content.encode()).hexdigest()[:12]
+        return f"art_{hash_val}"
 
-    async def add(self, content: str, metadata: dict = None) -> dict:
+    async def add(self, content: str, title: str = None, metadata: dict = None) -> dict:
         """Add content to Cognee."""
         await self._ensure_initialized()
+
+        # Generate title for tracking (Cognee uses document titles as IDs)
+        if not title:
+            title = f"doc_{self.generate_id(content)}"
 
         # Cognee.add() accepts text or list of texts
         await cognee.add(
@@ -463,271 +498,185 @@ class CogneeAdapter:
             dataset_name=self._dataset
         )
 
-        return {"status": "added"}
+        # Track for ID translation
+        content_id = self.generate_id(content)
+        self._content_registry[content_id] = {
+            "title": title,
+            "content_preview": content[:100]
+        }
+
+        return {"status": "added", "title": title}
 
     async def cognify(self) -> dict:
-        """Run Cognee extraction pipeline."""
+        """Run Cognee extraction pipeline (builds knowledge graph)."""
         await self._ensure_initialized()
 
-        # This builds the knowledge graph
-        result = await cognee.cognify()
+        # This builds the knowledge graph with triplets
+        await cognee.cognify()
 
-        # Parse result for stats
+        # Cognify doesn't return stats directly
         return {
-            "nodes": getattr(result, "node_count", 0),
-            "edges": getattr(result, "edge_count", 0)
+            "status": "processed",
+            "nodes": 0,  # Stats not directly available
+            "edges": 0
         }
 
     async def search(
         self,
         query: str,
         limit: int = 10,
-        search_type: str = "INSIGHTS"
+        search_type: SearchType = SearchType.CHUNKS
     ) -> list:
-        """Search Cognee knowledge graph."""
+        """Search Cognee - returns list of chunk objects."""
         await self._ensure_initialized()
 
         results = await cognee.search(
             query_type=search_type,
             query_text=query,
-            datasets=[self._dataset]
+            datasets=[self._dataset],
+            top_k=limit
         )
 
-        return results[:limit] if results else []
+        return list(results) if results else []
 
-    async def get_graph_context(
-        self,
-        query: str,
-        edge_types: list[str] = None
-    ) -> dict:
-        """Get graph nodes and edges related to query."""
-        await self._ensure_initialized()
+    async def search_chunks(self, query: str, limit: int = 10) -> List[dict]:
+        """
+        Search for document chunks - best for retrieval benchmarks.
 
-        # Use GRAPH_COMPLETION search type for graph traversal
-        results = await cognee.search(
-            query_type="GRAPH_COMPLETION",
-            query_text=query,
-            datasets=[self._dataset]
-        )
+        Returns: List of dicts with {document_title, text, metadata}
+        """
+        results = await self.search(query, limit, SearchType.CHUNKS)
 
-        entities = []
-        edges = []
-
-        for r in results or []:
-            # Extract entities from graph results
-            if hasattr(r, "source_node"):
-                entities.append({
-                    "name": r.source_node.get("name", ""),
-                    "type": r.source_node.get("type", ""),
-                    "id": r.source_node.get("id", "")
+        normalized = []
+        for r in results:
+            # CHUNKS results have document_title, text, metadata
+            if hasattr(r, "document_title"):
+                normalized.append({
+                    "id": self._title_to_id(r.document_title),
+                    "document_title": r.document_title,
+                    "text": getattr(r, "text", ""),
+                    "metadata": getattr(r, "metadata", {})
                 })
-            if hasattr(r, "target_node"):
-                entities.append({
-                    "name": r.target_node.get("name", ""),
-                    "type": r.target_node.get("type", ""),
-                    "id": r.target_node.get("id", "")
-                })
-            if hasattr(r, "relationship"):
-                edges.append({
-                    "source": r.source_node.get("name", ""),
-                    "target": r.target_node.get("name", ""),
-                    "type": r.relationship
+            elif isinstance(r, dict):
+                title = r.get("document_title", "unknown")
+                normalized.append({
+                    "id": self._title_to_id(title),
+                    "document_title": title,
+                    "text": r.get("text", ""),
+                    "metadata": r.get("metadata", {})
                 })
 
-        # Filter by edge types if specified
-        if edge_types:
-            edges = [e for e in edges if e["type"] in edge_types]
+        return normalized
 
-        # Deduplicate entities
-        seen = set()
-        unique_entities = []
-        for e in entities:
-            key = (e["name"], e["type"])
-            if key not in seen:
-                seen.add(key)
-                unique_entities.append(e)
+    async def search_graph(self, query: str) -> str:
+        """
+        Search using graph completion - returns LLM-generated answer.
 
-        return {
-            "entities": unique_entities,
-            "edges": edges
-        }
+        GRAPH_COMPLETION returns text strings, not structured data.
+        """
+        results = await self.search(query, limit=1, search_type=SearchType.GRAPH_COMPLETION)
+
+        if results:
+            # GRAPH_COMPLETION returns answer strings
+            return str(results[0]) if results else ""
+        return ""
+
+    def _title_to_id(self, title: str) -> str:
+        """Convert document title to our art_xxx ID format."""
+        # Try to find in registry first
+        for content_id, data in self._content_registry.items():
+            if data.get("title") == title:
+                return content_id
+
+        # Generate from title if not found
+        hash_val = hashlib.sha256(title.encode()).hexdigest()[:12]
+        return f"art_{hash_val}"
 
     async def get_status(self) -> dict:
         """Get Cognee status."""
         await self._ensure_initialized()
 
-        # Get basic stats
-        try:
-            # This may vary by Cognee version
-            return {
-                "version": getattr(cognee, "__version__", "unknown"),
-                "nodes": 0,  # Would need graph query
-                "edges": 0
-            }
-        except:
-            return {"version": "unknown"}
+        return {
+            "version": getattr(cognee, "__version__", "unknown"),
+            "dataset": self._dataset,
+            "tracked_documents": len(self._content_registry)
+        }
 
     async def reset(self) -> dict:
-        """Reset Cognee data."""
+        """Reset Cognee data (global - affects all data)."""
         await self._ensure_initialized()
 
         await cognee.prune.prune_data()
+        await cognee.prune.prune_system(metadata=True)
+        self._content_registry.clear()
 
         return {"status": "reset"}
 ```
 
-### File 4: src/response_normalizer.py
+### File 4: src/config.py
 
 ```python
 """
-Normalize Cognee responses to match our MCP Memory format.
-
-This ensures fair apples-to-apples comparison.
+Configuration for Cognee MCP server.
 """
 
-from typing import Any
+import os
 
+# Server config
+MCP_PORT = int(os.getenv("MCP_PORT", "3002"))
 
-def normalize_search_results(
-    raw_results: list,
-    graph_data: dict = None,
-    min_similarity: float = 0.0,
-    include_events: bool = True,
-    include_entities: bool = True,
-    include_edges: bool = False
-) -> dict:
-    """
-    Convert Cognee search results to our format.
-
-    Our format:
-    {
-        "results": [{"id", "content", "similarity", "metadata"}],
-        "events": [{"category", "description", "actors", "subjects"}],
-        "entities": [{"name", "type", "mentions"}],
-        "edges": [{"source", "target", "type", "confidence"}]
-    }
-    """
-
-    # Normalize main results
-    results = []
-    for r in raw_results or []:
-        # Handle different Cognee result formats
-        if isinstance(r, dict):
-            result = {
-                "id": r.get("id", ""),
-                "content": r.get("text", r.get("content", "")),
-                "similarity": r.get("score", r.get("relevance", 0.0)),
-                "metadata": r.get("metadata", {})
-            }
-        else:
-            # Object format
-            result = {
-                "id": getattr(r, "id", ""),
-                "content": getattr(r, "text", getattr(r, "content", "")),
-                "similarity": getattr(r, "score", 0.0),
-                "metadata": getattr(r, "metadata", {})
-            }
-
-        # Apply similarity filter
-        if result["similarity"] >= min_similarity:
-            results.append(result)
-
-    # Sort by similarity
-    results.sort(key=lambda x: x["similarity"], reverse=True)
-
-    # Extract events from results (Cognee embeds these differently)
-    events = []
-    if include_events:
-        events = extract_events_from_results(raw_results)
-
-    # Get entities from graph data
-    entities = []
-    if include_entities and graph_data:
-        entities = graph_data.get("entities", [])
-        # Normalize entity format
-        entities = [
-            {
-                "name": e.get("name", ""),
-                "type": e.get("type", "Unknown"),
-                "mentions": 1  # Cognee doesn't track mention count
-            }
-            for e in entities
-        ]
-
-    # Get edges from graph data
-    edges = []
-    if include_edges and graph_data:
-        edges = graph_data.get("edges", [])
-        # Normalize edge format
-        edges = [
-            {
-                "source": e.get("source", ""),
-                "target": e.get("target", ""),
-                "type": e.get("type", "RELATED_TO"),
-                "confidence": e.get("confidence", 0.8)
-            }
-            for e in edges
-        ]
-
-    return {
-        "results": results,
-        "events": events,
-        "entities": entities,
-        "edges": edges
-    }
-
-
-def extract_events_from_results(raw_results: list) -> list:
-    """
-    Extract event-like structures from Cognee results.
-
-    Cognee doesn't have explicit "events" but we can infer
-    from its knowledge graph nodes.
-    """
-    events = []
-
-    for r in raw_results or []:
-        # Check if this looks like an event node
-        node_type = None
-        if isinstance(r, dict):
-            node_type = r.get("type", r.get("node_type", ""))
-        else:
-            node_type = getattr(r, "type", getattr(r, "node_type", ""))
-
-        # Map Cognee node types to our event categories
-        event_category = map_to_event_category(node_type)
-
-        if event_category:
-            content = r.get("text", "") if isinstance(r, dict) else getattr(r, "text", "")
-            events.append({
-                "category": event_category,
-                "description": content[:200],
-                "actors": [],  # Would need deeper graph traversal
-                "subjects": [],
-                "confidence": r.get("score", 0.8) if isinstance(r, dict) else getattr(r, "score", 0.8)
-            })
-
-    return events
-
-
-def map_to_event_category(cognee_type: str) -> str:
-    """Map Cognee node types to our event categories."""
-
-    mapping = {
-        "decision": "Decision",
-        "commitment": "Commitment",
-        "action": "Execution",
-        "meeting": "Collaboration",
-        "issue": "QualityRisk",
-        "feedback": "Feedback",
-        "change": "Change",
-        "person": None,  # Not an event
-        "organization": None,
-        "project": None,
-    }
-
-    return mapping.get(cognee_type.lower(), None)
+# Cognee uses LLM_API_KEY env var
+# Set it from OPENAI_API_KEY if not present
+if not os.getenv("LLM_API_KEY"):
+    os.environ["LLM_API_KEY"] = os.getenv("OPENAI_API_KEY", "")
 ```
+
+---
+
+## Benchmark Compatibility Analysis
+
+### What's Comparable
+
+| Benchmark | Comparable? | Rationale |
+|-----------|-------------|-----------|
+| **Retrieval MRR** | ✅ Yes | Both return ranked documents |
+| **Retrieval NDCG** | ✅ Yes | Both return ranked documents |
+| **Retrieval P@K/R@K** | ✅ Yes | Both return ranked documents |
+| **Extraction F1** | ❌ No | We extract events, Cognee extracts triplets |
+| **Entity F1** | ⚠️ Partial | Different extraction methods |
+| **Graph F1** | ⚠️ Partial | Different graph models |
+
+### Why Extraction Isn't Comparable
+
+**Our system extracts events:**
+```json
+{
+  "category": "Decision",
+  "narrative": "Bob approved the Q1 budget",
+  "actors": [{"ref": "Bob Smith", "role": "decider"}],
+  "subject": {"type": "project", "ref": "Q1 Budget"}
+}
+```
+
+**Cognee extracts triplets:**
+```
+(Bob Smith) --[APPROVED]--> (Q1 Budget)
+```
+
+These are fundamentally different data structures optimized for different use cases.
+
+### Recommended Comparison Strategy
+
+1. **Primary comparison: Retrieval metrics only**
+   - MRR, NDCG, P@K, R@K
+   - Both systems can search and rank documents
+
+2. **Secondary: Manual inspection**
+   - Sample queries to compare answer quality
+   - Graph traversal capabilities
+
+3. **Skip: Extraction/Entity/Graph F1**
+   - Different structures make numerical comparison meaningless
 
 ### File 5: Dockerfile
 
@@ -885,14 +834,15 @@ if [ -n "$OUR_SCORE" ] && [ -n "$COGNEE_SCORE" ]; then
 fi
 ```
 
-### File: benchmarks/compare_full.py
+### File: benchmarks/compare_retrieval.py
 
 ```python
 #!/usr/bin/env python3
 """
-Full benchmark comparison between MCP Memory and Cognee.
+Retrieval-only benchmark comparison between MCP Memory and Cognee.
 
-Runs the complete V7 benchmark suite against both implementations.
+Only compares retrieval metrics (MRR, NDCG) which are directly comparable.
+Extraction/Entity/Graph metrics are NOT comparable due to different data models.
 """
 
 import asyncio
@@ -902,7 +852,6 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# Ensure we can import benchmark modules
 BENCHMARK_ROOT = Path(__file__).parent
 sys.path.insert(0, str(BENCHMARK_ROOT / 'tests'))
 sys.path.insert(0, str(BENCHMARK_ROOT / 'metrics'))
@@ -910,8 +859,8 @@ sys.path.insert(0, str(BENCHMARK_ROOT / 'metrics'))
 from benchmark_runner import BenchmarkRunner, BenchmarkConfig
 
 
-async def run_comparison():
-    """Run benchmarks against both implementations."""
+async def run_retrieval_comparison():
+    """Run retrieval benchmarks only against both implementations."""
 
     results = {}
 
@@ -922,74 +871,94 @@ async def run_comparison():
 
     for name, url in servers.items():
         print(f"\n{'='*60}")
-        print(f"Running benchmarks against: {name.upper()} ({url})")
+        print(f"Running RETRIEVAL benchmarks against: {name.upper()} ({url})")
         print('='*60)
 
         os.environ['MCP_URL'] = url
 
         config = BenchmarkConfig()
-        runner = BenchmarkRunner(mcp_url=url)
+        runner = BenchmarkRunner(config)
 
         try:
-            result = await runner.run_all()
-            results[name] = result
+            # Only run retrieval benchmarks
+            queries = runner.load_queries()
+            retrieval_results = await runner.run_retrieval_benchmarks(queries)
 
-            print(f"\n{name.upper()} Results:")
-            print(f"  Retrieval MRR:   {result.get('retrieval_mrr', 'N/A'):.3f}")
-            print(f"  Retrieval NDCG:  {result.get('retrieval_ndcg', 'N/A'):.3f}")
-            print(f"  Extraction F1:   {result.get('extraction_f1', 'N/A'):.3f}")
-            print(f"  Entity F1:       {result.get('entity_f1', 'N/A'):.3f}")
-            print(f"  Graph F1:        {result.get('graph_f1', 'N/A'):.3f}")
+            agg = retrieval_results.get('aggregated', {})
+            results[name] = {
+                "mrr": agg.get('mrr', 0),
+                "ndcg": agg.get('ndcg', 0),
+                "ndcg_at_5": agg.get('ndcg_at_5', 0),
+                "per_query": retrieval_results.get('per_query', [])
+            }
+
+            print(f"\n{name.upper()} Retrieval Results:")
+            print(f"  MRR:     {agg.get('mrr', 0):.3f}")
+            print(f"  NDCG:    {agg.get('ndcg', 0):.3f}")
+            print(f"  NDCG@5:  {agg.get('ndcg_at_5', 0):.3f}")
 
         except Exception as e:
             print(f"ERROR running {name}: {e}")
+            import traceback
+            traceback.print_exc()
             results[name] = {"error": str(e)}
 
     # Comparison
     print("\n" + "="*60)
-    print("COMPARISON")
+    print("RETRIEVAL COMPARISON (Comparable Metrics Only)")
     print("="*60)
 
-    metrics = ['retrieval_mrr', 'retrieval_ndcg', 'extraction_f1', 'entity_f1', 'graph_f1']
+    print(f"\n{'Metric':<15} {'Ours':>10} {'Cognee':>10} {'Delta':>10} {'Winner':>10}")
+    print("-" * 57)
 
-    print(f"\n{'Metric':<20} {'Ours':>10} {'Cognee':>10} {'Winner':>10}")
-    print("-" * 52)
-
-    for metric in metrics:
+    for metric in ['mrr', 'ndcg', 'ndcg_at_5']:
         ours = results.get('ours', {}).get(metric, 0)
         cognee = results.get('cognee', {}).get(metric, 0)
+        delta = ours - cognee
 
-        if ours > cognee:
+        if delta > 0.01:
             winner = "Ours"
-        elif cognee > ours:
+        elif delta < -0.01:
             winner = "Cognee"
         else:
             winner = "Tie"
 
-        print(f"{metric:<20} {ours:>10.3f} {cognee:>10.3f} {winner:>10}")
+        print(f"{metric:<15} {ours:>10.3f} {cognee:>10.3f} {delta:>+10.3f} {winner:>10}")
 
     # Save results
-    output_file = BENCHMARK_ROOT / 'comparison_results' / f'comparison_{datetime.now():%Y%m%d_%H%M%S}.json'
+    output_file = BENCHMARK_ROOT / 'comparison_results' / f'retrieval_comparison_{datetime.now():%Y%m%d_%H%M%S}.json'
     output_file.parent.mkdir(exist_ok=True)
 
     with open(output_file, 'w') as f:
         json.dump({
             "timestamp": datetime.now().isoformat(),
+            "comparison_type": "retrieval_only",
+            "note": "Only retrieval metrics are comparable. Extraction/Entity/Graph use different data models.",
             "results": results
         }, f, indent=2)
 
     print(f"\nResults saved to: {output_file}")
 
+    # Summary
+    print("\n" + "="*60)
+    print("SUMMARY")
+    print("="*60)
+    print("\nNote: Only retrieval metrics (MRR, NDCG) are directly comparable.")
+    print("Extraction F1, Entity F1, Graph F1 are NOT comparable because:")
+    print("  - Our system extracts semantic events with actors/subjects")
+    print("  - Cognee extracts triplets (subject-relation-object)")
+    print("  - These are fundamentally different data structures")
+
 
 if __name__ == "__main__":
-    asyncio.run(run_comparison())
+    asyncio.run(run_retrieval_comparison())
 ```
 
 ---
 
 ## Execution Plan
 
-### Step 1: Create Cognee Server (30 min)
+### Step 1: Create Cognee Server (45 min)
 
 ```bash
 # Create directory
@@ -999,12 +968,12 @@ mkdir -p .claude-workspace/implementation/cognee-server/src
 # - requirements.txt
 # - src/server.py
 # - src/cognee_adapter.py
-# - src/response_normalizer.py
+# - src/config.py
 # - Dockerfile
 # - README.md
 ```
 
-### Step 2: Test Cognee Server (15 min)
+### Step 2: Test Cognee Server Standalone (15 min)
 
 ```bash
 cd .claude-workspace/implementation/cognee-server
@@ -1012,48 +981,65 @@ cd .claude-workspace/implementation/cognee-server
 # Install
 pip install -r requirements.txt
 
-# Run
+# Run (ensure OPENAI_API_KEY is set)
 export OPENAI_API_KEY=sk-...
 python src/server.py
 
-# Test (in another terminal)
+# Test health (in another terminal)
 curl http://localhost:3002/health
+
+# Test remember tool via MCP
+curl -X POST http://localhost:3002/mcp/ \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"remember","arguments":{"content":"Test content"}}}'
 ```
 
-### Step 3: Run Comparison (15 min)
+### Step 3: Load Corpus Into Both Systems (15 min)
 
 ```bash
-# Ensure both servers running
-# Port 3001: Our server
-# Port 3002: Cognee server
+# Reset both systems
+curl http://localhost:3001/mcp/ -X POST -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"forget","arguments":{"id":"*","confirm":true}}}'
 
-cd .claude-workspace/benchmarks
+# Load corpus into our server
+MCP_URL=http://localhost:3001 python benchmarks/tests/benchmark_runner.py --record
 
-# Quick comparison
-./compare_implementations.sh
+# Reset Cognee
+curl http://localhost:3002/mcp/ -X POST -d '...' # reset call
 
-# Full comparison
-python compare_full.py
+# Load corpus into Cognee server
+MCP_URL=http://localhost:3002 python benchmarks/tests/benchmark_runner.py --record
 ```
 
-### Step 4: Analyze Results (30 min)
+### Step 4: Run Retrieval Comparison (15 min)
 
-Review comparison results and decide:
+```bash
+cd .claude-workspace/benchmarks
 
-| If... | Then... |
-|-------|---------|
-| Cognee wins by >10% | Consider adopting Cognee patterns or migrating |
-| We win by >10% | Continue custom development |
-| Within 10% | Choose based on maintenance burden |
+# Run retrieval-only comparison (comparable metrics)
+python compare_retrieval.py
+```
+
+### Step 5: Analyze Results (30 min)
+
+Review comparison results:
+
+| Outcome | Action |
+|---------|--------|
+| Cognee MRR/NDCG wins by >10% | Investigate Cognee's retrieval approach for adoption |
+| Our MRR/NDCG wins by >10% | Continue custom development |
+| Within 10% | Choose based on maintenance burden and feature needs |
+
+**Important**: Extraction/Entity/Graph F1 scores are NOT comparable - different data models.
 
 ---
 
 ## Success Criteria
 
-1. **Cognee server runs** - Same 4 tools, same port pattern
-2. **Benchmarks pass** - Both servers can complete outcome_eval.py
-3. **Results comparable** - Same metrics, same format
-4. **Clear decision** - Data supports next steps
+1. **Cognee server runs** - Responds to MCP protocol on port 3002
+2. **Can store corpus** - Both servers ingest same benchmark documents
+3. **Retrieval works** - Both servers return ranked results for queries
+4. **Fair comparison** - Same corpus, same queries, retrieval metrics only
+5. **Clear recommendation** - Data supports build-vs-adopt decision
 
 ---
 
@@ -1061,10 +1047,11 @@ Review comparison results and decide:
 
 | Risk | Mitigation |
 |------|------------|
-| Cognee API differs from docs | Read source code, test incrementally |
-| Response format mismatch | Normalize in adapter layer |
-| Cognee lacks features (delete) | Document limitations, score fairly |
-| Different LLM prompts | Note this affects extraction F1 |
+| Cognee API differs from docs | ✅ Verified against source - using SearchType enum correctly |
+| Response format mismatch | Use CHUNKS search type for retrieval (document_title/text format) |
+| Cognee lacks granular delete | Document limitation, doesn't affect retrieval benchmarks |
+| Different data models | Only compare retrieval metrics (MRR/NDCG) - extraction not comparable |
+| ID format mismatch | Track content → title mapping in adapter for ID translation |
 
 ---
 
@@ -1072,11 +1059,12 @@ Review comparison results and decide:
 
 | Task | Effort |
 |------|--------|
-| Create Cognee server files | 30 min |
-| Test Cognee server | 15 min |
-| Run comparison benchmarks | 15 min |
+| Create Cognee server files | 45 min |
+| Test Cognee server standalone | 15 min |
+| Load corpus into both systems | 15 min |
+| Run retrieval comparison | 15 min |
 | Analyze results | 30 min |
-| **Total** | **~1.5 hours** |
+| **Total** | **~2 hours** |
 
 ---
 
@@ -1093,5 +1081,6 @@ Review comparison results and decide:
 
 | Date | Change |
 |------|--------|
+| 2026-01-14 | **Updated with verified Cognee API**: SearchType enum, CHUNKS response format, benchmark compatibility analysis |
 | 2026-01-13 | Detailed implementation spec with code |
 | 2026-01-13 | Created initial V10 spec |
