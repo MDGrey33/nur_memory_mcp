@@ -1,0 +1,811 @@
+{
+  "queries": 100,
+  "passages": 1028,
+  "k": 10,
+  "mrr": 0.82575,
+  "precision": 0.28900000000000003,
+  "recall": 0.9806666666666666,
+  "hit_rate": 1.0,
+  "per_query": [
+    {
+      "query_id": "658",
+      "mrr": 0.25,
+      "precision": 0.3,
+      "recall": 1.0,
+      "positive_retrieved": 3,
+      "total_positives": 3
+    },
+    {
+      "query_id": "3445",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "1688",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "1845",
+      "mrr": 1.0,
+      "precision": 0.6,
+      "recall": 1.0,
+      "positive_retrieved": 6,
+      "total_positives": 6
+    },
+    {
+      "query_id": "3819",
+      "mrr": 1.0,
+      "precision": 0.3,
+      "recall": 0.6,
+      "positive_retrieved": 3,
+      "total_positives": 5
+    },
+    {
+      "query_id": "4425",
+      "mrr": 1.0,
+      "precision": 0.4,
+      "recall": 1.0,
+      "positive_retrieved": 4,
+      "total_positives": 4
+    },
+    {
+      "query_id": "1786",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "3560",
+      "mrr": 0.5,
+      "precision": 0.5,
+      "recall": 0.8333333333333334,
+      "positive_retrieved": 5,
+      "total_positives": 6
+    },
+    {
+      "query_id": "545",
+      "mrr": 1.0,
+      "precision": 0.7,
+      "recall": 0.875,
+      "positive_retrieved": 7,
+      "total_positives": 8
+    },
+    {
+      "query_id": "3808",
+      "mrr": 1.0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "positive_retrieved": 5,
+      "total_positives": 5
+    },
+    {
+      "query_id": "2323",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "1063",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "1071",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "4047",
+      "mrr": 0.2,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "3348",
+      "mrr": 0.5,
+      "precision": 0.4,
+      "recall": 1.0,
+      "positive_retrieved": 4,
+      "total_positives": 4
+    },
+    {
+      "query_id": "2629",
+      "mrr": 0.25,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "2665",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "4069",
+      "mrr": 0.3333333333333333,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "3548",
+      "mrr": 1.0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "positive_retrieved": 5,
+      "total_positives": 5
+    },
+    {
+      "query_id": "4225",
+      "mrr": 0.5,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "477",
+      "mrr": 0.3333333333333333,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "2542",
+      "mrr": 1.0,
+      "precision": 0.4,
+      "recall": 1.0,
+      "positive_retrieved": 4,
+      "total_positives": 4
+    },
+    {
+      "query_id": "1609",
+      "mrr": 1.0,
+      "precision": 0.3,
+      "recall": 1.0,
+      "positive_retrieved": 3,
+      "total_positives": 3
+    },
+    {
+      "query_id": "1416",
+      "mrr": 1.0,
+      "precision": 0.6,
+      "recall": 1.0,
+      "positive_retrieved": 6,
+      "total_positives": 6
+    },
+    {
+      "query_id": "1819",
+      "mrr": 1.0,
+      "precision": 0.4,
+      "recall": 1.0,
+      "positive_retrieved": 4,
+      "total_positives": 4
+    },
+    {
+      "query_id": "2945",
+      "mrr": 1.0,
+      "precision": 0.6,
+      "recall": 1.0,
+      "positive_retrieved": 6,
+      "total_positives": 6
+    },
+    {
+      "query_id": "1055",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "534",
+      "mrr": 1.0,
+      "precision": 0.3,
+      "recall": 1.0,
+      "positive_retrieved": 3,
+      "total_positives": 3
+    },
+    {
+      "query_id": "113",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "3190",
+      "mrr": 0.5,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "4364",
+      "mrr": 0.5,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "1390",
+      "mrr": 1.0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "positive_retrieved": 5,
+      "total_positives": 5
+    },
+    {
+      "query_id": "747",
+      "mrr": 1.0,
+      "precision": 0.9,
+      "recall": 0.9,
+      "positive_retrieved": 9,
+      "total_positives": 10
+    },
+    {
+      "query_id": "224",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "2208",
+      "mrr": 0.5,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "2731",
+      "mrr": 0.5,
+      "precision": 0.4,
+      "recall": 1.0,
+      "positive_retrieved": 4,
+      "total_positives": 4
+    },
+    {
+      "query_id": "1349",
+      "mrr": 1.0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "positive_retrieved": 5,
+      "total_positives": 5
+    },
+    {
+      "query_id": "3706",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "3433",
+      "mrr": 0.25,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "4324",
+      "mrr": 1.0,
+      "precision": 0.9,
+      "recall": 0.9,
+      "positive_retrieved": 9,
+      "total_positives": 10
+    },
+    {
+      "query_id": "2831",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "3661",
+      "mrr": 0.5,
+      "precision": 0.4,
+      "recall": 1.0,
+      "positive_retrieved": 4,
+      "total_positives": 4
+    },
+    {
+      "query_id": "2775",
+      "mrr": 0.3333333333333333,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "786",
+      "mrr": 0.3333333333333333,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "2741",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "2309",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "1553",
+      "mrr": 1.0,
+      "precision": 0.4,
+      "recall": 1.0,
+      "positive_retrieved": 4,
+      "total_positives": 4
+    },
+    {
+      "query_id": "2886",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "1562",
+      "mrr": 0.125,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "1017",
+      "mrr": 0.5,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "1027",
+      "mrr": 1.0,
+      "precision": 0.3,
+      "recall": 1.0,
+      "positive_retrieved": 3,
+      "total_positives": 3
+    },
+    {
+      "query_id": "1711",
+      "mrr": 1.0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "positive_retrieved": 5,
+      "total_positives": 5
+    },
+    {
+      "query_id": "3798",
+      "mrr": 1.0,
+      "precision": 0.7,
+      "recall": 1.0,
+      "positive_retrieved": 7,
+      "total_positives": 7
+    },
+    {
+      "query_id": "4123",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "3391",
+      "mrr": 1.0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "positive_retrieved": 5,
+      "total_positives": 5
+    },
+    {
+      "query_id": "4360",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "3705",
+      "mrr": 0.1,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "2235",
+      "mrr": 0.5,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "3027",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "3844",
+      "mrr": 1.0,
+      "precision": 0.4,
+      "recall": 1.0,
+      "positive_retrieved": 4,
+      "total_positives": 4
+    },
+    {
+      "query_id": "2909",
+      "mrr": 1.0,
+      "precision": 0.8,
+      "recall": 1.0,
+      "positive_retrieved": 8,
+      "total_positives": 8
+    },
+    {
+      "query_id": "2842",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "1195",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "3648",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "151",
+      "mrr": 1.0,
+      "precision": 0.7,
+      "recall": 1.0,
+      "positive_retrieved": 7,
+      "total_positives": 7
+    },
+    {
+      "query_id": "1369",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "3990",
+      "mrr": 1.0,
+      "precision": 0.7,
+      "recall": 1.0,
+      "positive_retrieved": 7,
+      "total_positives": 7
+    },
+    {
+      "query_id": "174",
+      "mrr": 1.0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "positive_retrieved": 5,
+      "total_positives": 5
+    },
+    {
+      "query_id": "1932",
+      "mrr": 0.16666666666666666,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "2773",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "3479",
+      "mrr": 0.5,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "3935",
+      "mrr": 1.0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "positive_retrieved": 5,
+      "total_positives": 5
+    },
+    {
+      "query_id": "1926",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "3610",
+      "mrr": 1.0,
+      "precision": 0.9,
+      "recall": 1.0,
+      "positive_retrieved": 9,
+      "total_positives": 9
+    },
+    {
+      "query_id": "1857",
+      "mrr": 0.5,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "2127",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "1336",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "3030",
+      "mrr": 0.5,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "1256",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "4328",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "3289",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "3714",
+      "mrr": 0.2,
+      "precision": 0.1,
+      "recall": 0.3333333333333333,
+      "positive_retrieved": 1,
+      "total_positives": 3
+    },
+    {
+      "query_id": "4026",
+      "mrr": 0.2,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "584",
+      "mrr": 1.0,
+      "precision": 0.3,
+      "recall": 0.75,
+      "positive_retrieved": 3,
+      "total_positives": 4
+    },
+    {
+      "query_id": "1654",
+      "mrr": 1.0,
+      "precision": 0.6,
+      "recall": 1.0,
+      "positive_retrieved": 6,
+      "total_positives": 6
+    },
+    {
+      "query_id": "3120",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "1271",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "119",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "2692",
+      "mrr": 1.0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "positive_retrieved": 5,
+      "total_positives": 5
+    },
+    {
+      "query_id": "987",
+      "mrr": 1.0,
+      "precision": 0.4,
+      "recall": 1.0,
+      "positive_retrieved": 4,
+      "total_positives": 4
+    },
+    {
+      "query_id": "2745",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "1628",
+      "mrr": 0.5,
+      "precision": 0.7,
+      "recall": 0.875,
+      "positive_retrieved": 7,
+      "total_positives": 8
+    },
+    {
+      "query_id": "3953",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "365",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "2305",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "2395",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    },
+    {
+      "query_id": "675",
+      "mrr": 1.0,
+      "precision": 0.3,
+      "recall": 1.0,
+      "positive_retrieved": 3,
+      "total_positives": 3
+    },
+    {
+      "query_id": "1378",
+      "mrr": 0.5,
+      "precision": 0.3,
+      "recall": 1.0,
+      "positive_retrieved": 3,
+      "total_positives": 3
+    },
+    {
+      "query_id": "2102",
+      "mrr": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "positive_retrieved": 2,
+      "total_positives": 2
+    },
+    {
+      "query_id": "2327",
+      "mrr": 1.0,
+      "precision": 0.1,
+      "recall": 1.0,
+      "positive_retrieved": 1,
+      "total_positives": 1
+    }
+  ]
+}

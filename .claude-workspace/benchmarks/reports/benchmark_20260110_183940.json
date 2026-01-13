@@ -1,0 +1,470 @@
+{
+  "timestamp": "2026-01-10T18:39:40.353985",
+  "mode": "live",
+  "strict": true,
+  "extraction": {
+    "per_document": [
+      {
+        "doc_id": "meetings/meeting_001.txt",
+        "precision": 0.8,
+        "recall": 0.8,
+        "f1": 0.8000000000000002,
+        "tp": 4,
+        "fp": 1,
+        "fn": 1
+      },
+      {
+        "doc_id": "meetings/meeting_002.txt",
+        "precision": 0.8571428571428571,
+        "recall": 0.6666666666666666,
+        "f1": 0.75,
+        "tp": 6,
+        "fp": 1,
+        "fn": 3
+      },
+      {
+        "doc_id": "meetings/meeting_003.txt",
+        "precision": 0.6,
+        "recall": 0.6,
+        "f1": 0.6,
+        "tp": 3,
+        "fp": 2,
+        "fn": 2
+      },
+      {
+        "doc_id": "meetings/meeting_004.txt",
+        "precision": 0.5,
+        "recall": 0.8333333333333334,
+        "f1": 0.625,
+        "tp": 5,
+        "fp": 5,
+        "fn": 1
+      },
+      {
+        "doc_id": "meetings/meeting_005.txt",
+        "precision": 0.8,
+        "recall": 0.3333333333333333,
+        "f1": 0.47058823529411764,
+        "tp": 4,
+        "fp": 1,
+        "fn": 8
+      },
+      {
+        "doc_id": "emails/email_001.txt",
+        "precision": 0.16666666666666666,
+        "recall": 0.5,
+        "f1": 0.25,
+        "tp": 1,
+        "fp": 5,
+        "fn": 1
+      },
+      {
+        "doc_id": "emails/email_002.txt",
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "tp": 0,
+        "fp": 6,
+        "fn": 4
+      },
+      {
+        "doc_id": "emails/email_003.txt",
+        "precision": 0.3333333333333333,
+        "recall": 0.6666666666666666,
+        "f1": 0.4444444444444444,
+        "tp": 2,
+        "fp": 4,
+        "fn": 1
+      },
+      {
+        "doc_id": "decisions/decision_001.txt",
+        "precision": 0.4,
+        "recall": 0.6666666666666666,
+        "f1": 0.5,
+        "tp": 2,
+        "fp": 3,
+        "fn": 1
+      },
+      {
+        "doc_id": "decisions/decision_002.txt",
+        "precision": 0.2,
+        "recall": 0.3333333333333333,
+        "f1": 0.25,
+        "tp": 1,
+        "fp": 4,
+        "fn": 2
+      },
+      {
+        "doc_id": "conversations/conversation_001.txt",
+        "precision": 0.2857142857142857,
+        "recall": 0.4,
+        "f1": 0.3333333333333333,
+        "tp": 2,
+        "fp": 5,
+        "fn": 3
+      },
+      {
+        "doc_id": "conversations/conversation_002.txt",
+        "precision": 0.16666666666666666,
+        "recall": 0.16666666666666666,
+        "f1": 0.16666666666666666,
+        "tp": 1,
+        "fp": 5,
+        "fn": 5
+      }
+    ],
+    "aggregated": {
+      "precision": 0.4246575342465753,
+      "recall": 0.49206349206349204,
+      "f1": 0.45588235294117646,
+      "macro_f1": 0.4325027233115468,
+      "total_tp": 31,
+      "total_fp": 42,
+      "total_fn": 32,
+      "num_documents": 12
+    },
+    "pass": false,
+    "errors": []
+  },
+  "entities": {
+    "per_document": [
+      {
+        "doc_id": "meetings/meeting_001.txt",
+        "precision": 0.375,
+        "recall": 1.0,
+        "f1": 0.5454545454545454,
+        "tp": 3,
+        "fp": 5,
+        "fn": 0
+      },
+      {
+        "doc_id": "meetings/meeting_002.txt",
+        "precision": 0.625,
+        "recall": 1.0,
+        "f1": 0.7692307692307693,
+        "tp": 5,
+        "fp": 3,
+        "fn": 0
+      },
+      {
+        "doc_id": "meetings/meeting_003.txt",
+        "precision": 0.6666666666666666,
+        "recall": 1.0,
+        "f1": 0.8,
+        "tp": 4,
+        "fp": 2,
+        "fn": 0
+      },
+      {
+        "doc_id": "meetings/meeting_004.txt",
+        "precision": 0.4375,
+        "recall": 1.0,
+        "f1": 0.6086956521739131,
+        "tp": 7,
+        "fp": 9,
+        "fn": 0
+      },
+      {
+        "doc_id": "meetings/meeting_005.txt",
+        "precision": 0.375,
+        "recall": 0.375,
+        "f1": 0.375,
+        "tp": 3,
+        "fp": 5,
+        "fn": 5
+      },
+      {
+        "doc_id": "emails/email_001.txt",
+        "precision": 0.4444444444444444,
+        "recall": 0.6666666666666666,
+        "f1": 0.5333333333333333,
+        "tp": 4,
+        "fp": 5,
+        "fn": 2
+      },
+      {
+        "doc_id": "emails/email_002.txt",
+        "precision": 0.25,
+        "recall": 0.5,
+        "f1": 0.3333333333333333,
+        "tp": 2,
+        "fp": 6,
+        "fn": 2
+      },
+      {
+        "doc_id": "emails/email_003.txt",
+        "precision": 0.5,
+        "recall": 1.0,
+        "f1": 0.6666666666666666,
+        "tp": 5,
+        "fp": 5,
+        "fn": 0
+      },
+      {
+        "doc_id": "decisions/decision_001.txt",
+        "precision": 0.375,
+        "recall": 0.75,
+        "f1": 0.5,
+        "tp": 3,
+        "fp": 5,
+        "fn": 1
+      },
+      {
+        "doc_id": "decisions/decision_002.txt",
+        "precision": 0.2857142857142857,
+        "recall": 0.6666666666666666,
+        "f1": 0.4,
+        "tp": 2,
+        "fp": 5,
+        "fn": 1
+      },
+      {
+        "doc_id": "conversations/conversation_001.txt",
+        "precision": 0.45454545454545453,
+        "recall": 0.8333333333333334,
+        "f1": 0.5882352941176471,
+        "tp": 5,
+        "fp": 6,
+        "fn": 1
+      },
+      {
+        "doc_id": "conversations/conversation_002.txt",
+        "precision": 0.4166666666666667,
+        "recall": 0.8333333333333334,
+        "f1": 0.5555555555555556,
+        "tp": 5,
+        "fp": 7,
+        "fn": 1
+      }
+    ],
+    "aggregated": {
+      "precision": 0.43243243243243246,
+      "recall": 0.7868852459016393,
+      "f1": 0.5581395348837209,
+      "macro_f1": 0.556292095822147,
+      "total_tp": 48,
+      "total_fp": 63,
+      "total_fn": 13,
+      "num_documents": 12
+    },
+    "pass": false,
+    "errors": []
+  },
+  "retrieval": {
+    "per_query": [
+      {
+        "query_id": "q001",
+        "mrr": 1.0,
+        "ndcg": 0.9072278740982787,
+        "ndcg_at_5": 0.9072278740982787,
+        "precision_at_3": 0.6666666666666666,
+        "recall_at_5": 1.0,
+        "first_relevant_rank": 1
+      },
+      {
+        "query_id": "q002",
+        "mrr": 0.5,
+        "ndcg": 0.7147390643272713,
+        "ndcg_at_5": 0.5768867934386075,
+        "precision_at_3": 0.6666666666666666,
+        "recall_at_5": 0.75,
+        "first_relevant_rank": 2
+      },
+      {
+        "query_id": "q003",
+        "mrr": 1.0,
+        "ndcg": 0.8409934714173857,
+        "ndcg_at_5": 0.6662577939453029,
+        "precision_at_3": 0.6666666666666666,
+        "recall_at_5": 0.5,
+        "first_relevant_rank": 1
+      },
+      {
+        "query_id": "q004",
+        "mrr": 1.0,
+        "ndcg": 1.0,
+        "ndcg_at_5": 1.0,
+        "precision_at_3": 0.6666666666666666,
+        "recall_at_5": 1.0,
+        "first_relevant_rank": 1
+      },
+      {
+        "query_id": "q005",
+        "mrr": 1.0,
+        "ndcg": 1.0,
+        "ndcg_at_5": 1.0,
+        "precision_at_3": 0.6666666666666666,
+        "recall_at_5": 1.0,
+        "first_relevant_rank": 1
+      },
+      {
+        "query_id": "q006",
+        "mrr": 1.0,
+        "ndcg": 0.9197207891481876,
+        "ndcg_at_5": 0.9197207891481876,
+        "precision_at_3": 0.6666666666666666,
+        "recall_at_5": 1.0,
+        "first_relevant_rank": 1
+      },
+      {
+        "query_id": "q007",
+        "mrr": 1.0,
+        "ndcg": 1.0,
+        "ndcg_at_5": 1.0,
+        "precision_at_3": 0.6666666666666666,
+        "recall_at_5": 1.0,
+        "first_relevant_rank": 1
+      },
+      {
+        "query_id": "q008",
+        "mrr": 1.0,
+        "ndcg": 1.0,
+        "ndcg_at_5": 1.0,
+        "precision_at_3": 0.6666666666666666,
+        "recall_at_5": 1.0,
+        "first_relevant_rank": 1
+      },
+      {
+        "query_id": "q009",
+        "mrr": 1.0,
+        "ndcg": 1.0,
+        "ndcg_at_5": 1.0,
+        "precision_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "first_relevant_rank": 1
+      },
+      {
+        "query_id": "q010",
+        "mrr": 1.0,
+        "ndcg": 1.0,
+        "ndcg_at_5": 1.0,
+        "precision_at_3": 0.3333333333333333,
+        "recall_at_5": 1.0,
+        "first_relevant_rank": 1
+      },
+      {
+        "query_id": "q011",
+        "mrr": 0.3333333333333333,
+        "ndcg": 0.5726073975563164,
+        "ndcg_at_5": 0.4161811555487309,
+        "precision_at_3": 0.3333333333333333,
+        "recall_at_5": 0.6666666666666666,
+        "first_relevant_rank": 3
+      },
+      {
+        "query_id": "q012",
+        "mrr": 1.0,
+        "ndcg": 1.0,
+        "ndcg_at_5": 1.0,
+        "precision_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "first_relevant_rank": 1
+      },
+      {
+        "query_id": "q013",
+        "mrr": 0.3333333333333333,
+        "ndcg": 0.5,
+        "ndcg_at_5": 0.5,
+        "precision_at_3": 0.3333333333333333,
+        "recall_at_5": 1.0,
+        "first_relevant_rank": 3
+      },
+      {
+        "query_id": "q014",
+        "mrr": 0.0,
+        "ndcg": 0.0,
+        "ndcg_at_5": 0.0,
+        "precision_at_3": 0.0,
+        "recall_at_5": 0.0,
+        "first_relevant_rank": null
+      },
+      {
+        "query_id": "q015",
+        "mrr": 1.0,
+        "ndcg": 0.9049765583210164,
+        "ndcg_at_5": 0.9049765583210164,
+        "precision_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "first_relevant_rank": 1
+      }
+    ],
+    "aggregated": {
+      "mrr": 0.8111111111111111,
+      "ndcg": 0.8240176769912304,
+      "ndcg_at_3": 0.0,
+      "ndcg_at_5": 0.7927500643000083,
+      "precision_at_1": 0.0,
+      "precision_at_3": 0.6222222222222221,
+      "precision_at_5": 0.0,
+      "recall_at_5": 0.861111111111111,
+      "recall_at_10": 0.0,
+      "num_queries": 15,
+      "queries_with_relevant_result": 14
+    },
+    "pass_mrr": true,
+    "pass_ndcg": true,
+    "errors": []
+  },
+  "graph": {
+    "per_query": [
+      {
+        "query_id": "gq_001",
+        "connection_precision": 0.45454545454545453,
+        "connection_recall": 0.8333333333333334,
+        "connection_f1": 0.5882352941176471,
+        "doc_precision": 0.2413793103448276,
+        "doc_recall": 0.7777777777777778,
+        "doc_f1": 0.368421052631579
+      },
+      {
+        "query_id": "gq_002",
+        "connection_precision": 0.5714285714285714,
+        "connection_recall": 1.0,
+        "connection_f1": 0.7272727272727273,
+        "doc_precision": 0.1935483870967742,
+        "doc_recall": 0.8571428571428571,
+        "doc_f1": 0.3157894736842105
+      },
+      {
+        "query_id": "gq_003",
+        "connection_precision": 0.42857142857142855,
+        "connection_recall": 1.0,
+        "connection_f1": 0.6,
+        "doc_precision": 0.13793103448275862,
+        "doc_recall": 1.0,
+        "doc_f1": 0.2424242424242424
+      },
+      {
+        "query_id": "gq_004",
+        "connection_precision": 0.0,
+        "connection_recall": 1.0,
+        "connection_f1": 0.0,
+        "doc_precision": 0.0967741935483871,
+        "doc_recall": 1.0,
+        "doc_f1": 0.17647058823529413
+      },
+      {
+        "query_id": "gq_005",
+        "connection_precision": 0.45454545454545453,
+        "connection_recall": 1.0,
+        "connection_f1": 0.625,
+        "doc_precision": 0.05405405405405406,
+        "doc_recall": 1.0,
+        "doc_f1": 0.10256410256410257
+      }
+    ],
+    "aggregated": {
+      "connection_precision": 0.3818181818181818,
+      "connection_recall": 0.9666666666666666,
+      "connection_f1": 0.5081016042780748,
+      "doc_precision": 0.1447373959053603,
+      "doc_recall": 0.9269841269841269,
+      "doc_f1": 0.24113389190788573,
+      "num_queries": 5
+    },
+    "pass": false,
+    "errors": []
+  },
+  "overall_pass": false,
+  "errors": []
+}
